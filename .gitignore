@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+venv/
+*.db
+.env
+node_modules/
+dist/
+security/reports/
+fabric-identity/
+backend/uploads/

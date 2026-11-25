@@ -1,0 +1,70 @@
+{
+  "realm": "healthharbor",
+  "enabled": true,
+  "displayName": "HealthHarbor Healthcare Exchange",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "verifyEmail": true,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      { "name": "PATIENT", "description": "Patient access" },
+      { "name": "PHYSICIAN", "description": "Physician access" },
+      { "name": "LAB", "description": "Laboratory access" },
+      { "name": "LAB_TECHNICIAN", "description": "Laboratory technician access" },
+      { "name": "LAB_SUPERVISOR", "description": "Laboratory supervisor access" },
+      { "name": "ADMIN", "description": "Administrator access" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "healthcare-exchange-web",
+      "name": "HealthHarbor web application",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:4173/*",
+        "http://127.0.0.1:4173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*##http://127.0.0.1:5173/*##http://localhost:4173/*##http://127.0.0.1:4173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "healthcare-exchange-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "healthcare-exchange-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "lightweight.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "requiredCredentials": ["password"],
+  "loginTheme": "keycloak",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "defaultRoles": ["PATIENT"]
+}

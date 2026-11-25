@@ -1,0 +1,130 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in root .env}"
+      POSTGRES_DB: postgres
+      DB_PASSWORD: "${DB_PASSWORD:?Set DB_PASSWORD in root .env}"
+      KEYCLOAK_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD in root .env}"
+      HAPI_DB_PASSWORD: "${HAPI_DB_PASSWORD:?Set HAPI_DB_PASSWORD in root .env}"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deployment/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: "${APP_ENV:-development}"
+      DATABASE_URL: "postgresql+psycopg2://healthapp:${DB_PASSWORD:?Set DB_PASSWORD in root .env}@db:5432/healthcare_exchange"
+      DB_POOL_SIZE: "${DB_POOL_SIZE:-10}"
+      DB_MAX_OVERFLOW: "${DB_MAX_OVERFLOW:-10}"
+      FILE_STORAGE_PATH: /var/lib/healthharbor/files
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000}"
+      DB_AUTO_CREATE: "0"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in root .env}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}"
+      AUTH_PROVIDER: "${AUTH_PROVIDER:-local}"
+      KEYCLOAK_ISSUER: "${KEYCLOAK_ISSUER:-http://localhost:8080/realms/healthharbor}"
+      KEYCLOAK_JWKS_URL: "${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/healthharbor/protocol/openid-connect/certs}"
+      KEYCLOAK_AUDIENCE: "${KEYCLOAK_AUDIENCE:-healthcare-exchange-api}"
+      FHIR_MODE: "${FHIR_MODE:-local}"
+      FHIR_SERVER_URL: "${FHIR_SERVER_URL:-http://hapi:8080/fhir}"
+      FHIR_SERVER_BEARER_TOKEN: "${FHIR_SERVER_BEARER_TOKEN:-}"
+      FABRIC_ENABLED: "${FABRIC_ENABLED:-false}"
+      FABRIC_GATEWAY_URL: "${FABRIC_GATEWAY_URL:-http://fabric-gateway:8080}"
+      FABRIC_GATEWAY_TOKEN: "${FABRIC_GATEWAY_TOKEN:-}"
+      FABRIC_PSEUDONYM_KEY: "${FABRIC_PSEUDONYM_KEY:-}"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - clinical_files:/var/lib/healthharbor/files
+    depends_on:
+      db:
+        condition: service_healthy
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    profiles: ["identity"]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD in root .env}"
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_ADMIN_USERNAME:-admin}"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD:-local-development-change-me}"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./deployment/keycloak/healthharbor-realm.json:/opt/keycloak/data/import/healthharbor-realm.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  hapi:
+    image: hapiproject/hapi:v7.4.0
+    profiles: ["fhir"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/hapi_fhir
+      SPRING_DATASOURCE_USERNAME: hapi
+      SPRING_DATASOURCE_PASSWORD: "${HAPI_DB_PASSWORD:?Set HAPI_DB_PASSWORD in root .env}"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      HIBERNATE_DIALECT: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      SPRING_APPLICATION_JSON: >-
+        {"spring":{"jpa":{"properties":{"hibernate.dialect":"ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect","hibernate.jdbc.lob.non_contextual_creation":"true"}}}}
+      HAPI_FHIR_VERSION: R4
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  fabric-gateway:
+    build: ./fabric/adapter
+    profiles: ["fabric"]
+    environment:
+      FABRIC_GATEWAY_TOKEN: "${FABRIC_GATEWAY_TOKEN:?Set FABRIC_GATEWAY_TOKEN in root .env}"
+      MSP_ID: "${FABRIC_MSP_ID:-Org1MSP}"
+      CERT_PATH: /run/fabric/identity/cert.pem
+      KEY_PATH: /run/fabric/identity/key.pem
+      TLS_CERT_PATH: /run/fabric/tls/peer-ca.crt
+      TLS_SERVER_NAME: "${FABRIC_TLS_SERVER_NAME:-peer0.org1.example.com}"
+      PEER_ENDPOINT: "${FABRIC_PEER_ENDPOINT:-peer0.org1.example.com:7051}"
+      CHANNEL_NAME: "${FABRIC_CHANNEL_NAME:-mychannel}"
+      CHAINCODE_NAME: "${FABRIC_CHAINCODE_NAME:-clinical-provenance}"
+    expose:
+      - "8080"
+    volumes:
+      - "${FABRIC_CERT_PATH:-./fabric-identity/cert.pem}:/run/fabric/identity/cert.pem:ro"
+      - "${FABRIC_KEY_PATH:-./fabric-identity/key.pem}:/run/fabric/identity/key.pem:ro"
+      - "${FABRIC_TLS_CERT_PATH:-./fabric-identity/peer-ca.crt}:/run/fabric/tls/peer-ca.crt:ro"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+      - fabric_network
+
+volumes:
+  pgdata:
+  clinical_files:
+
+networks:
+  fabric_network:
+    name: "${FABRIC_DOCKER_NETWORK:-net}"
+    external: true
