@@ -11,7 +11,7 @@ import (
 
 const validEvent = `{
   "eventId":"550e8400-e29b-41d4-a716-446655440000",
-  "eventType":"clinical.resource.created",
+  "eventType":"SERVICE_REQUEST_CREATED",
   "actorRefHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "subjectRefHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "resourceRefHash":null,
@@ -45,7 +45,7 @@ func TestParseClinicalEventAcceptsBackendEventTypes(t *testing.T) {
 	}
 	for _, eventType := range eventTypes {
 		t.Run(eventType, func(t *testing.T) {
-			payload := strings.Replace(validEvent, "clinical.resource.created", eventType, 1)
+			payload := strings.Replace(validEvent, "SERVICE_REQUEST_CREATED", eventType, 1)
 			event, _, err := parseClinicalEvent([]byte(payload))
 			if err != nil {
 				t.Fatalf("parse event type %s: %v", eventType, err)
@@ -54,6 +54,13 @@ func TestParseClinicalEventAcceptsBackendEventTypes(t *testing.T) {
 				t.Fatalf("eventType = %q, want %q", event.EventType, eventType)
 			}
 		})
+	}
+}
+
+func TestParseClinicalEventRejectsUnapprovedEventType(t *testing.T) {
+	payload := strings.Replace(validEvent, "SERVICE_REQUEST_CREATED", "UNREVIEWED_EVENT", 1)
+	if _, _, err := parseClinicalEvent([]byte(payload)); err == nil {
+		t.Fatal("unapproved event type was accepted")
 	}
 }
 
@@ -84,7 +91,7 @@ func TestParseClinicalEventRejectsInvalidReferencesAndEnums(t *testing.T) {
 	}{
 		{"raw subject reference", `"subjectRefHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`, `"subjectRefHash":"patient-123"`},
 		{"invalid payload hash", `"payloadHash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"`, `"payloadHash":"not-a-digest"`},
-		{"invalid event type", `"eventType":"clinical.resource.created"`, `"eventType":"free text"`},
+		{"invalid event type", `"eventType":"SERVICE_REQUEST_CREATED"`, `"eventType":"free text"`},
 		{"non-UTC time", `"occurredAt":"2026-01-02T03:04:05Z"`, `"occurredAt":"2026-01-02T03:04:05+01:00"`},
 	}
 	for _, test := range tests {
@@ -143,7 +150,7 @@ func TestRecordEventIsAppendOnlyAndReadable(t *testing.T) {
 	if !strings.Contains(string(read.Payload), `"transactionId":"tx-record-1"`) {
 		t.Fatalf("stored event missing original transaction ID: %s", read.Payload)
 	}
-	if !strings.Contains(string(read.Payload), `"eventType":"clinical.resource.created"`) {
+	if !strings.Contains(string(read.Payload), `"eventType":"SERVICE_REQUEST_CREATED"`) {
 		t.Fatalf("stored event missing eventType: %s", read.Payload)
 	}
 	if !strings.Contains(string(read.Payload), `"subjectRefHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`) {

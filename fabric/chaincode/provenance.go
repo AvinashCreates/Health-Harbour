@@ -20,9 +20,22 @@ const maxEventSize = 4096
 var (
 	uuidPattern         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	hashPattern         = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	eventTypePattern    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,63}$`)
 	resourceTypePattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
 )
+
+var allowedEventTypes = map[string]struct{}{
+	"CONSENT_GRANTED":             {},
+	"CONSENT_REVOKED":             {},
+	"SERVICE_REQUEST_CREATED":     {},
+	"SPECIMEN_REGISTERED":         {},
+	"DIAGNOSTIC_REPORT_FINALIZED": {},
+	"CLINICAL_REVIEW_RECORDED":    {},
+	"LAB_REPORT_FINALIZED":        {},
+	"PHYSICIAN_REVIEW_RECORDED":   {},
+	"DATA_ACCESSED":               {},
+	"DOCUMENT_UPLOADED":           {},
+	"DOCUMENT_DELETED":            {},
+}
 
 // ClinicalEventInput is the ledger-safe projection of a backend outbox event.
 type ClinicalEventInput struct {
@@ -185,8 +198,8 @@ func parseClinicalEvent(payload []byte) (*ClinicalEventInput, []byte, error) {
 	if !uuidPattern.MatchString(event.EventID) {
 		return nil, nil, fmt.Errorf("eventId must be a canonical lowercase UUID")
 	}
-	if !eventTypePattern.MatchString(event.EventType) {
-		return nil, nil, fmt.Errorf("invalid eventType")
+	if !isAllowedEventType(event.EventType) {
+		return nil, nil, fmt.Errorf("unsupported eventType")
 	}
 	if !hashPattern.MatchString(event.ActorRefHash) || !hashPattern.MatchString(event.PayloadHash) {
 		return nil, nil, fmt.Errorf("actorRefHash and payloadHash must be lowercase SHA-256 digests")
@@ -220,4 +233,9 @@ func parseClinicalEvent(payload []byte) (*ClinicalEventInput, []byte, error) {
 		return nil, nil, fmt.Errorf("encode event")
 	}
 	return &event, canonicalJSON, nil
+}
+
+func isAllowedEventType(eventType string) bool {
+	_, allowed := allowedEventTypes[eventType]
+	return allowed
 }

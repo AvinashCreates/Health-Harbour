@@ -1,18 +1,9 @@
-"""Simulated permissioned-ledger layer.
+"""Local hash-chained audit log with optional Fabric outbox delivery.
 
-This is NOT Hyperledger Fabric and does not claim to be: there is no
-multi-peer consensus and no separate organizations each holding a copy.
-What it does provide, honestly, is the specific property the abstract
-asks the blockchain layer for -- tamper-evident provenance: every audit
-entry's hash commits to the previous entry's hash plus its own content,
-so editing any past row (e.g. an admin trying to quietly erase a
-CONSENT_REVOKED event directly in the database) changes that row's
-correct hash and breaks the chain for every entry after it. /audit/verify
-recomputes the whole chain and reports exactly where it breaks, if it does.
-
-Swapping this for real Hyperledger Fabric later would add decentralized
-trust across separate organizations -- call that out as a future
-enhancement rather than something already built.
+The local chain detects edits and reordering in this database; it is not
+distributed consensus and does not replace Hyperledger Fabric. When Fabric is
+enabled, selected allowlisted audit events are also queued for the Gateway and
+remain pending until a commit transaction ID is confirmed.
 """
 
 import hashlib

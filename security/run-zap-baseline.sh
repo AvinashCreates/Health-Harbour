@@ -2,6 +2,10 @@
 set -eu
 
 : "${TARGET_URL:?Set TARGET_URL to the running application URL}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/require-local-target.sh"
+require_local_target "$TARGET_URL"
+
 OUTPUT_DIR="${OUTPUT_DIR:-./security/reports}"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"

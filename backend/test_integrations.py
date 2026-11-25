@@ -1,5 +1,8 @@
 import base64
 import os
+import secrets
+import subprocess
+import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -14,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import database
+import auth_utils
 from main import app
 import models
 from database import get_db
@@ -124,12 +128,183 @@ class OIDCIntegrationTests(unittest.TestCase):
         with self.assertRaises(JWTError):
             oidc.decode_keycloak_token(self.issue_token(aud="different-api"))
 
-    def test_prefers_privileged_explicit_realm_role(self):
+    def test_rejects_ambiguous_explicit_realm_roles(self):
+        self.assertIsNone(
+            oidc.map_keycloak_role({"realm_access": {"roles": ["PATIENT", "PHYSICIAN"]}})
+        )
         self.assertEqual(
-            oidc.map_keycloak_role({"realm_access": {"roles": ["PATIENT", "PHYSICIAN"]}}),
+            oidc.map_keycloak_role({"realm_access": {"roles": ["PHYSICIAN"]}}),
             "doctor",
         )
         self.assertIsNone(oidc.map_keycloak_role({"realm_access": {"roles": "ADMIN"}}))
+
+    @patch("services.oidc._load_jwks")
+    def test_rejects_missing_audience(self, load_jwks):
+        load_jwks.return_value = self.jwks
+        with self.assertRaises(JWTError):
+            oidc.decode_keycloak_token(self.issue_token(aud=None))
+
+
+class LocalTokenSecurityTests(unittest.TestCase):
+    def test_local_access_token_requires_expiry_and_nonempty_subject(self):
+        missing_expiry = jwt.encode(
+            {"sub": "test-subject"},
+            auth_utils.SECRET_KEY,
+            algorithm="HS256",
+        )
+        empty_subject = auth_utils.create_access_token({"sub": " "})
+        valid = auth_utils.create_access_token({"sub": "test-subject"})
+
+        self.assertIsNone(auth_utils.decode_access_token(missing_expiry))
+        self.assertIsNone(auth_utils.decode_access_token(empty_subject))
+        self.assertEqual(auth_utils.decode_access_token(valid)["sub"], "test-subject")
+
+    def test_production_rejects_missing_and_known_development_secrets(self):
+        for secret in (None, " " * 64, "dev-secret-change-in-production-please",
+                       "local-development-secret-change-before-deployment-123456"):
+            with self.subTest(secret=secret):
+                environment = os.environ.copy()
+                environment["APP_ENV"] = "production"
+                if secret is None:
+                    environment.pop("JWT_SECRET", None)
+                else:
+                    environment["JWT_SECRET"] = secret
+                result = subprocess.run(
+                    [sys.executable, "-c", "import auth_utils"],
+                    cwd=os.path.dirname(__file__),
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("JWT_SECRET", result.stderr)
+
+    def test_production_accepts_a_unique_long_secret(self):
+        environment = os.environ.copy()
+        environment["APP_ENV"] = "production"
+        environment["JWT_SECRET"] = secrets.token_urlsafe(48)
+        result = subprocess.run(
+            [sys.executable, "-c", "import auth_utils"],
+            cwd=os.path.dirname(__file__),
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class ConsentAuthorizationTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        models.Base.metadata.create_all(bind=self.engine)
+        self.session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
+        db = self.session_factory()
+        self.patient = models.User(
+            id="consent-patient",
+            full_name="Synthetic Patient",
+            email="consent-patient@example.com",
+            hashed_password="unused",
+            role="patient",
+        )
+        self.doctor = models.User(
+            id="consent-doctor",
+            full_name="Synthetic Physician",
+            email="consent-doctor@example.com",
+            hashed_password="unused",
+            role="doctor",
+        )
+        self.laboratory = models.User(
+            id="consent-lab",
+            full_name="Synthetic Laboratory",
+            email="consent-lab@example.com",
+            hashed_password="unused",
+            role="lab",
+        )
+        db.add_all([self.patient, self.doctor, self.laboratory])
+        db.flush()
+        patient_resource = models.FHIRResource(
+            id="consent-patient-resource",
+            resource_type="Patient",
+            fhir_id=self.patient.id,
+            resource_data={"resourceType": "Patient", "id": self.patient.id},
+            owner_id=self.patient.id,
+            created_by=self.patient.id,
+        )
+        request = models.FHIRResource(
+            id="consent-request-resource",
+            resource_type="ServiceRequest",
+            fhir_id="expired-request",
+            resource_data={
+                "resourceType": "ServiceRequest",
+                "id": "expired-request",
+                "subject": {"reference": f"Patient/{self.patient.id}"},
+            },
+            owner_id=self.patient.id,
+            created_by=self.doctor.id,
+        )
+        db.add_all([patient_resource, request])
+        db.flush()
+        db.add_all([
+            models.Consent(
+                patient_id=self.patient.id,
+                grantee_id=self.doctor.id,
+                resource_types=["Patient", "ServiceRequest"],
+                granted_at=datetime.utcnow() - timedelta(days=31),
+                expires_at=datetime.utcnow() - timedelta(seconds=1),
+            ),
+            models.LaboratoryWorkflow(
+                service_request_id=request.id,
+                patient_id=self.patient.id,
+                physician_id=self.doctor.id,
+                laboratory_id=self.laboratory.id,
+                status="REQUESTED",
+            ),
+        ])
+        db.commit()
+        db.close()
+
+        self.previous_overrides = app.dependency_overrides.copy()
+
+        def override_db():
+            session = self.session_factory()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_current_user] = lambda: self.doctor
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        self.client.close()
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(self.previous_overrides)
+        self.engine.dispose()
+
+    def test_expired_consent_denies_patient_reads_and_service_request_access(self):
+        patient_response = self.client.get(f"/fhir/Patient/{self.patient.id}")
+        self.assertEqual(patient_response.status_code, 403)
+
+        request_list = self.client.get("/fhir/ServiceRequest")
+        self.assertEqual(request_list.status_code, 200, request_list.text)
+        self.assertEqual(request_list.json(), [])
+
+        create_request = self.client.post(
+            "/fhir/ServiceRequest",
+            headers={"Idempotency-Key": "expired-consent-request"},
+            json={
+                "patient_email": self.patient.email,
+                "lab_email": self.laboratory.email,
+            },
+        )
+        self.assertEqual(create_request.status_code, 403, create_request.text)
 
 
 class FHIRIntegrationTests(unittest.TestCase):
@@ -344,6 +519,21 @@ class FabricOutboxTests(unittest.TestCase):
         self.environment.stop()
         self.engine.dispose()
 
+    def test_outbox_ignores_event_types_outside_backend_allowlist(self):
+        db = self.session_factory()
+        try:
+            ledger.queue_ledger_event(
+                db,
+                "actor-internal-id",
+                "UNREVIEWED_EVENT",
+                {"patient_id": "patient-internal-id"},
+                datetime(2030, 1, 1),
+            )
+            db.commit()
+            self.assertEqual(db.query(models.LedgerOutbox).count(), 0)
+        finally:
+            db.close()
+
     def test_outbox_excludes_identifiers_and_tracks_confirmed_commit(self):
         db = self.session_factory()
         try:
@@ -363,6 +553,16 @@ class FabricOutboxTests(unittest.TestCase):
             serialized_event = str(event.event_payload)
             self.assertNotIn("patient-internal-id", serialized_event)
             self.assertNotIn("fhir-resource-internal-id", serialized_event)
+            self.assertEqual(set(event.event_payload), {
+                "eventId",
+                "eventType",
+                "actorRef",
+                "subjectRef",
+                "resourceRef",
+                "resourceType",
+                "occurredAt",
+                "payloadHash",
+            })
             self.assertEqual(event.status, "PENDING")
 
             response = MagicMock()

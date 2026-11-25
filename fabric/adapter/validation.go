@@ -10,12 +10,25 @@ import (
 )
 
 var (
-	eventIDPattern     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	digestPattern      = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	eventTypePattern   = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,63}$`)
-	referencePattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
+	eventIDPattern      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	digestPattern       = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	referencePattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
 	resourceTypePattern = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
 )
+
+var allowedEventTypes = map[string]struct{}{
+	"CONSENT_GRANTED":             {},
+	"CONSENT_REVOKED":             {},
+	"SERVICE_REQUEST_CREATED":     {},
+	"SPECIMEN_REGISTERED":         {},
+	"DIAGNOSTIC_REPORT_FINALIZED": {},
+	"CLINICAL_REVIEW_RECORDED":    {},
+	"LAB_REPORT_FINALIZED":        {},
+	"PHYSICIAN_REVIEW_RECORDED":   {},
+	"DATA_ACCESSED":               {},
+	"DOCUMENT_UPLOADED":           {},
+	"DOCUMENT_DELETED":            {},
+}
 
 var errIdempotencyConflict = errors.New("eventId already exists with different content")
 
@@ -23,8 +36,8 @@ func convertOutboxEvent(outbox OutboxEvent) (ClinicalEvent, error) {
 	if !eventIDPattern.MatchString(outbox.EventID) {
 		return ClinicalEvent{}, fmt.Errorf("invalid eventId")
 	}
-	if !eventTypePattern.MatchString(outbox.EventType) {
-		return ClinicalEvent{}, fmt.Errorf("invalid eventType")
+	if !isAllowedEventType(outbox.EventType) {
+		return ClinicalEvent{}, fmt.Errorf("unsupported eventType")
 	}
 	if !referencePattern.MatchString(outbox.ActorRef) {
 		return ClinicalEvent{}, fmt.Errorf("invalid actorRef")
@@ -63,6 +76,11 @@ func convertOutboxEvent(outbox OutboxEvent) (ClinicalEvent, error) {
 	}, nil
 }
 
+func isAllowedEventType(eventType string) bool {
+	_, allowed := allowedEventTypes[eventType]
+	return allowed
+}
+
 func hashNullableReference(reference *string) (*string, error) {
 	if reference == nil {
 		return nil, nil
@@ -77,7 +95,7 @@ func hashNullableReference(reference *string) (*string, error) {
 
 func validateClinicalEvent(event ClinicalEvent) error {
 	if !eventIDPattern.MatchString(event.EventID) ||
-		!eventTypePattern.MatchString(event.EventType) ||
+		!isAllowedEventType(event.EventType) ||
 		!digestPattern.MatchString(event.ActorRefHash) ||
 		!digestPattern.MatchString(event.PayloadHash) {
 		return fmt.Errorf("invalid event identifiers")

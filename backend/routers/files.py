@@ -91,9 +91,14 @@ def _metadata(
     db: Session,
     user: models.User,
     workflow: models.LaboratoryWorkflow | None = None,
+    users_by_id: dict[str, models.User] | None = None,
 ) -> dict:
-    patient = db.query(models.User).filter(models.User.id == file_record.patient_id).first()
-    uploader = db.query(models.User).filter(models.User.id == file_record.uploaded_by_id).first()
+    if users_by_id is None:
+        patient = db.query(models.User).filter(models.User.id == file_record.patient_id).first()
+        uploader = db.query(models.User).filter(models.User.id == file_record.uploaded_by_id).first()
+    else:
+        patient = users_by_id.get(file_record.patient_id)
+        uploader = users_by_id.get(file_record.uploaded_by_id)
     return {
         "id": file_record.id,
         "patient_id": file_record.patient_id,
@@ -219,6 +224,7 @@ def list_files(
     current_user: models.User = Depends(get_current_user),
 ):
     query = db.query(models.ClinicalFile).filter(models.ClinicalFile.deleted_at.is_(None))
+    lab_workflow_scope = None
     if current_user.role == "patient":
         query = query.filter(models.ClinicalFile.patient_id == current_user.id)
     elif current_user.role == "doctor":
@@ -236,24 +242,69 @@ def list_files(
             return []
         query = query.filter(models.ClinicalFile.patient_id.in_(patient_ids))
     elif current_user.role in {"lab", "lab_supervisor", "lab_technician"}:
-        workflows = db.query(models.LaboratoryWorkflow)
-        if current_user.role == "lab_technician":
-            workflows = workflows.filter(models.LaboratoryWorkflow.technician_id == current_user.id)
-        else:
-            workflows = workflows.filter(models.LaboratoryWorkflow.laboratory_id == current_user.id)
-        request_ids = [workflow.service_request_id for workflow in workflows.all()]
-        if not request_ids:
-            return []
-        query = query.filter(models.ClinicalFile.service_request_id.in_(request_ids))
+        lab_workflow_scope = db.query(models.LaboratoryWorkflow).filter(
+            models.LaboratoryWorkflow.technician_id == current_user.id
+            if current_user.role == "lab_technician"
+            else models.LaboratoryWorkflow.laboratory_id == current_user.id
+        )
+        query = query.filter(
+            models.ClinicalFile.service_request_id.in_(
+                lab_workflow_scope.with_entities(models.LaboratoryWorkflow.service_request_id)
+            )
+        )
     else:
         raise HTTPException(status_code=403, detail="This account cannot view clinical files")
 
     files = query.order_by(models.ClinicalFile.created_at.desc()).limit(250).all()
-    return [
-        _metadata(file_record, db, current_user, _workflow_for_file(db, file_record))
+    if not files:
+        return []
+
+    user_ids = {
+        user_id
         for file_record in files
-        if _can_access(db, file_record, current_user)
-    ]
+        for user_id in (file_record.patient_id, file_record.uploaded_by_id)
+    }
+    users_by_id = {
+        user.id: user
+        for user in db.query(models.User).filter(models.User.id.in_(user_ids)).all()
+    }
+
+    request_ids = {
+        file_record.service_request_id
+        for file_record in files
+        if file_record.service_request_id
+    }
+    workflows_by_file: dict[tuple[str, str], models.LaboratoryWorkflow] = {}
+    if request_ids:
+        workflows = db.query(models.LaboratoryWorkflow).filter(
+            models.LaboratoryWorkflow.service_request_id.in_(request_ids)
+        )
+        if lab_workflow_scope is not None:
+            workflows = workflows.filter(
+                models.LaboratoryWorkflow.technician_id == current_user.id
+                if current_user.role == "lab_technician"
+                else models.LaboratoryWorkflow.laboratory_id == current_user.id
+            )
+        workflows_by_file = {
+            (workflow.service_request_id, workflow.patient_id): workflow
+            for workflow in workflows.all()
+        }
+
+    result = []
+    for file_record in files:
+        workflow = workflows_by_file.get(
+            (file_record.service_request_id, file_record.patient_id)
+        ) if file_record.service_request_id else None
+        if lab_workflow_scope is not None and workflow is None:
+            continue
+        result.append(_metadata(
+            file_record,
+            db,
+            current_user,
+            workflow,
+            users_by_id,
+        ))
+    return result
 
 
 @router.get("/patients")

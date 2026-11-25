@@ -1,20 +1,31 @@
 # Clinical provenance on Hyperledger Fabric
 
-This directory contains Go chaincode that stores append-only provenance events and a Go HTTP adapter using the Fabric Gateway Go API. The adapter accepts backend outbox fields and hashes actor, subject, and resource references before they reach Fabric. The chaincode validates the closed schema and stores both the hashed backend actor reference and a digest derived from Fabric's transaction creator identity. Hashes remain linkable pseudonymous data; protect the ledger and logs accordingly.
+This directory contains Go chaincode that stores append-only provenance events and a Go HTTP adapter using the Fabric Gateway Go API. The adapter accepts backend outbox fields and hashes actor, subject, and resource references before they reach Fabric. Both the adapter and chaincode enforce a closed allowlist of event types as well as a strict event schema, so syntactically valid but unapproved event names are rejected. The chaincode stores both the hashed backend actor reference and a digest derived from Fabric's transaction creator identity. Hashes remain linkable pseudonymous data; protect the ledger and logs accordingly.
 
-## Deploy to an existing Fabric test-network
+## Deploy a two-organization research network
 
-Requirements: Go 1.23+, Docker, and a running Hyperledger Fabric `test-network` checkout. Run from that checkout:
+Requirements: Go 1.23+, Docker, and a local Hyperledger Fabric `fabric-samples/test-network` checkout. The sample network supplies two peer organizations and an ordering service; for this prototype, use Org1 as the provider organization and Org2 as the laboratory organization. This is a local research topology, not a production trust or identity configuration.
+
+From `fabric-samples/test-network`, create the channel and start the peers/orderer with certificate authorities:
+
+```sh
+./network.sh up createChannel -ca -c mychannel
+```
+
+Deploy the project's Go chaincode with endorsements required from both organizations:
 
 ```sh
 ./network.sh deployCC \
   -ccn clinical-provenance \
   -ccp /absolute/path/to/healthcare-exchange/fabric/chaincode \
   -ccl go \
-  -c mychannel
+  -c mychannel \
+  -ccep "AND('Org1MSP.peer','Org2MSP.peer')"
 ```
 
-The channel and chaincode names can be changed through `CHANNEL_NAME` and `CHAINCODE_NAME` for the adapter. The test-network's default TLS Gateway is usually `localhost:7051`; use its peer TLS certificate and matching server name below.
+The chaincode endorsement policy makes both the provider and laboratory peer organizations endorse writes. The backend adapter connects using an Org1 provider identity; endorsement still requires both organizations. The channel and chaincode names can be changed through `CHANNEL_NAME` and `CHAINCODE_NAME` for the adapter. The test-network's default TLS Gateway is usually `localhost:7051`; use its peer TLS certificate and matching server name below.
+
+With the test-network running, attach the Compose adapter to its external `net` Docker network (`FABRIC_DOCKER_NETWORK=net`) and use Org1's client certificate, private key, and peer TLS CA as shown below. Never commit generated identity or TLS material.
 
 ## Run the adapter
 
@@ -85,10 +96,10 @@ The HTTP listener defaults to `127.0.0.1:8080`; override with `LISTEN_ADDR` only
 curl -i http://127.0.0.1:8080/events \
   -H "Authorization: Bearer $FABRIC_GATEWAY_TOKEN" \
   -H 'Content-Type: application/json' \
-  --data '{"eventId":"550e8400-e29b-41d4-a716-446655440000","eventType":"clinical.resource.created","actorRef":"clinician-456","subjectRef":"patient-123","resourceRef":"resource-789","resourceType":"Observation","occurredAt":"2026-01-02T03:04:05Z","payloadHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+  --data '{"eventId":"550e8400-e29b-41d4-a716-446655440000","eventType":"SERVICE_REQUEST_CREATED","actorRef":"clinician-456","subjectRef":"patient-123","resourceRef":"resource-789","resourceType":"Observation","occurredAt":"2026-01-02T03:04:05Z","payloadHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
 ```
 
-Success returns exactly `{"transactionId":"..."}` only after Gateway confirms commit. Retries with the same `eventId` and same normalized event return its recorded transaction ID without another submission; reusing an ID with different content returns `409 Conflict`. References are restricted to safe identifier characters and hashed before submission. `payloadHash` must be a lowercase SHA-256 digest. Nullable subject/resource references and resource type are accepted. Do not send PHI/PII or free text. Protect the bearer token, Fabric identity key, TLS material, and ledger access. This documentation describes commands only; it does not assert that a network deployment has been run or verified.
+Success returns exactly `{"transactionId":"..."}` only after Gateway confirms commit. Retries with the same `eventId` and same normalized event return its recorded transaction ID without another submission; reusing an ID with different content returns `409 Conflict`. References are restricted to safe identifier characters and hashed before submission. `payloadHash` must be a lowercase SHA-256 digest. Nullable subject/resource references and resource type are accepted. The event type must match an explicitly allowlisted application event. Do not send PHI/PII or free text. Protect the bearer token, Fabric identity key, TLS material, and ledger access. This documentation describes commands only; it does not assert that a network deployment has been run or verified.
 
 ## Tests
 

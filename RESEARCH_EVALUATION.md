@@ -14,9 +14,9 @@ evidence that a current external integration was exercised.
 | Patient-selected doctor, resource scope, expiry up to 30 days, and early revocation | Consent API enforces 1–30 days and checks current authorization on protected requests | API and security tests passed with SQLite; repeat against PostgreSQL/HAPI deployment |
 | Role-based access for patient, doctor, lab, technician, and administrator | Backend dependencies plus ownership, consent, laboratory membership, and workflow assignment checks | API, security, and workflow tests passed locally; run the same checks against the deployed stack |
 | Off-chain clinical data and selected ledger provenance | Private file storage and a Fabric outbox carrying pseudonymous references and hashes | Fabric code and chaincode exist; a real commit has not been verified. Local hash-chained audit is not Fabric |
-| Secure authentication | Local JWT mode and optional Keycloak/OIDC PKCE/JWKS integration | Local flow is available; live Keycloak login, refresh, provisioning, and logout require verification |
-| Functional and controlled security evaluation | API acceptance/security suites, ZAP runner | Automated tests are not a penetration test; ZAP has not been run on the current deployment |
-| Scalability/performance evaluation under rising workloads | k6 ramping runner and a Python load-test script | No current-stack results are recorded. Run against a stated hardware/database/service configuration |
+| Secure authentication | Local JWT mode and optional Keycloak/OIDC PKCE/JWKS integration | Local JWT expiry/subject, production secret, OIDC audience, and ambiguous-role tests pass; live Keycloak login, refresh, provisioning, and logout require verification |
+| Functional and controlled security evaluation | API acceptance/security suites, loopback-only ZAP runner | Automated tests are not a penetration test; ZAP has not been run on the current deployment |
+| Scalability/performance evaluation under rising workloads | k6 ramping runner, Python load-test script, bounded-query file-list regression | The file-list query count is covered locally; no current-stack performance results are recorded. Run against a stated hardware/database/service configuration |
 | Evaluate response time, throughput, unauthorized access, FHIR interoperability, auditability, and ledger overhead | Existing tests and configurable evaluation runners | Consolidated current-revision measurements remain outstanding; compare ledger off/on only on the same setup |
 
 ## Current verification record
@@ -33,19 +33,23 @@ The repository includes:
 - `fabric/chaincode` and `fabric/adapter` Go tests.
 - `security/run-zap-baseline.sh` and `security/run-k6.sh`.
 
-For this checkout, the API and security scripts passed with separate
-temporary SQLite databases, and the integration, file, and audit unittest
-modules passed (16 tests total). Backend requirements were installed only in a
-temporary environment. A three-request-per-phase Python load-runner smoke
-check also passed on an isolated local API; it is only a runner check, not a
-usable performance result. User-provided Arch Linux output from 2026-11-25
-also confirms the PostgreSQL Compose database was healthy, backend `/health`
-reported database connectivity, both Fabric Go modules passed `go test ./...`,
-and HAPI 7.4.0 completed startup with the expected PostgreSQL tables and R4
-metadata. This does not yet verify FHIR resource CRUD or workflow
-interoperability. Earlier Compose output showed a temporary DNS failure for
-`db`; the later successful health output confirms connectivity was restored
-at the time of that check.
+On 2026-11-26, the local API and adversarial security scripts passed against
+separate temporary SQLite databases. The integration and file unittest suites
+passed 26 tests, including JWT/OIDC negative cases, expired-consent denials,
+and outbox allowlist/payload-shape checks. Three tests also passed for the
+Python load runner's loopback-only target validation. Shell syntax and
+non-loopback target refusal checks passed for the ZAP and k6 wrappers. These
+are local automated checks, not live integrations, a ZAP scan, or performance
+measurements. Docker, Go, and k6 are unavailable in this workspace; the local
+API/HAPI probes did not respond.
+
+Earlier user-provided Arch Linux output from 2026-11-25 confirms PostgreSQL
+Compose health, backend `/health` database connectivity, both Fabric Go module
+test commands, and HAPI 7.4.0 startup with expected PostgreSQL tables and R4
+metadata. This does not verify current live service availability, FHIR
+resource CRUD, or workflow interoperability. Earlier Compose output showed a
+temporary DNS failure for `db`; later user-provided health output confirmed
+connectivity was restored at the time of that earlier check.
 
 Historical benchmark numbers from prior prototype revisions have deliberately
 been removed from this report. They do not measure the current integrated
@@ -117,7 +121,8 @@ RAMP_DURATION=1m \
 ```
 
 For a Python-only smoke load (100 GET requests at concurrency 1, 10, and 50),
-run from the backend directory with a suitable synthetic token:
+run from the backend directory with a suitable synthetic token. This runner
+accepts only localhost or a loopback IP origin:
 
 ```bash
 LOAD_TEST_URL=http://127.0.0.1:8000 \

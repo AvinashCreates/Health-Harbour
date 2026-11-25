@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -146,6 +146,80 @@ class ClinicalFileApiTests(unittest.TestCase):
         revoked = self.client.get(f"/files/{file_id}/download", headers=self._headers(self.doctor))
         self.assertEqual(revoked.status_code, 404)
 
+    def test_expired_document_consent_denies_list_download_and_upload_picker(self):
+        uploaded = self._upload_patient_file(self.patient)
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        file_id = uploaded.json()["id"]
+
+        consent_db = self.session_factory()
+        try:
+            consent_db.add(models.Consent(
+                patient_id=self.patient.id,
+                grantee_id=self.doctor.id,
+                resource_types=["Document"],
+                granted_at=datetime.utcnow() - timedelta(days=31),
+                expires_at=datetime.utcnow() - timedelta(seconds=1),
+            ))
+            consent_db.commit()
+        finally:
+            consent_db.close()
+
+        listed_files = self.client.get("/files", headers=self._headers(self.doctor))
+        self.assertEqual(listed_files.status_code, 200)
+        self.assertEqual(listed_files.json(), [])
+
+        download = self.client.get(
+            f"/files/{file_id}/download",
+            headers=self._headers(self.doctor),
+        )
+        self.assertEqual(download.status_code, 404)
+
+        upload_patients = self.client.get(
+            "/files/patients",
+            headers=self._headers(self.doctor),
+        )
+        self.assertEqual(upload_patients.status_code, 200)
+        self.assertEqual(upload_patients.json(), [])
+
+    def test_patient_file_listing_uses_bounded_queries_as_file_count_grows(self):
+        db = self.session_factory()
+        try:
+            db.add_all([
+                models.ClinicalFile(
+                    patient_id=self.patient.id,
+                    uploaded_by_id=self.patient.id,
+                    filename=f"record-{index}.txt",
+                    storage_key=f"record-{index}",
+                    media_type="text/plain",
+                    category="clinical-record",
+                    size_bytes=1,
+                    sha256="a" * 64,
+                )
+                for index in range(20)
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        select_count = 0
+
+        def count_selects(_connection, _cursor, statement, _parameters, _context, _executemany):
+            nonlocal select_count
+            if statement.lstrip().upper().startswith("SELECT"):
+                select_count += 1
+
+        event.listen(self.engine, "before_cursor_execute", count_selects)
+        try:
+            response = self.client.get("/files", headers=self._headers(self.patient))
+        finally:
+            event.remove(self.engine, "before_cursor_execute", count_selects)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(response.json()), 20)
+        self.assertTrue(all(item["patient_name"] == self.patient.full_name for item in response.json()))
+        self.assertTrue(all(item["uploaded_by_name"] == self.patient.full_name for item in response.json()))
+        self.assertLessEqual(select_count, 4)
+
     def test_physician_patient_picker_only_returns_active_document_consent(self):
         self.assertEqual(
             self.client.get("/files/patients", headers=self._headers(self.doctor)).json(),
@@ -224,6 +298,12 @@ class ClinicalFileApiTests(unittest.TestCase):
         )
         self.assertEqual(uploaded.status_code, 201, uploaded.text)
         file_id = uploaded.json()["id"]
+        laboratory_files = self.client.get("/files", headers=self._headers(self.lab))
+        technician_files = self.client.get("/files", headers=self._headers(self.technician))
+        other_laboratory_files = self.client.get("/files", headers=self._headers(self.other_lab))
+        self.assertEqual([item["id"] for item in laboratory_files.json()], [file_id])
+        self.assertEqual([item["id"] for item in technician_files.json()], [file_id])
+        self.assertEqual(other_laboratory_files.json(), [])
         self.assertEqual(
             self.client.get(f"/files/{file_id}/download", headers=self._headers(self.lab)).status_code,
             200,

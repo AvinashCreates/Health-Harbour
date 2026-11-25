@@ -74,40 +74,43 @@ environment.
 
 ## Prioritized implementation and verification plan
 
-### Phase 1 — Prove HAPI resource persistence end to end
+### Phase 1 — Secure authentication
 
-**Goal:** move from HAPI process/schema readiness to actual interoperability
-evidence.
-
-1. Reconfirm `docker compose ps`, backend `/health`, and HAPI R4 metadata.
-2. Use synthetic records to create, read, and update representative resources:
-   `Patient`, `Practitioner`, `ServiceRequest`, `Specimen`, `Observation`,
-   `DiagnosticReport`, and `Consent`.
-3. Exercise `$validate`, conditional version updates, and resource references
-   used by the application workflow.
-4. Run the application workflow through patient consent, physician request,
-   lab/technician processing, report finalization, and physician review.
-5. Confirm resources are persisted in HAPI and authorization still blocks
-   reads/writes after consent expiry or revocation.
-6. Save concise command/API results and any failures in the evaluation record;
-   do not publish PHI, tokens, or secrets.
-
-**Exit criteria:** representative resource create/read/update/validation
-operations pass against HAPI R4, references resolve, and an authorized
-synthetic workflow succeeds while revoked/expired consent is denied.
-
-### Phase 2 — Verify live Keycloak authentication
+The local JWT and OIDC validation paths have received additional negative-test
+coverage. Complete this phase by verifying the configured identity provider
+against a live Keycloak realm:
 
 1. Import or update the `healthharbor` realm and ensure localhost and
    `127.0.0.1` redirect/origin settings match the browser URL in use.
 2. Test Authorization Code + PKCE, sign-out, token refresh/expiry, verified
    patient registration, and administrator-provisioned staff.
-3. Test that invalid signature, issuer, audience, expiry, and role claims are
-   rejected by the API.
+3. Verify invalid signature, issuer, audience, expiry, subject, and ambiguous
+   role claims are rejected by the API.
 4. Confirm profile linking uses the stable identity subject, not email alone.
 
 **Exit criteria:** successful live browser flows and a recorded negative-token
-test matrix, using synthetic users.
+test matrix using synthetic users. Until then, Keycloak remains implemented
+but not live-verified.
+
+### Phase 2 — Verify consent enforcement and FHIR interoperability
+
+1. Exercise default-deny behavior for each role and protected resource/action.
+2. Verify named physician, patient binding, resource scope, 1–30 day duration,
+   automatic expiry, early revocation, access history, and denied access after
+   each boundary.
+3. Against HAPI R4, create, read, and update representative resources:
+   `Patient`, `Practitioner`, `ServiceRequest`, `Specimen`, `Observation`,
+   `DiagnosticReport`, and `Consent`.
+4. Exercise `$validate`, conditional version updates, and resource references
+   used by the application workflow.
+5. Run the synthetic consent-to-laboratory workflow through report review and
+   confirm expired/revoked access is denied.
+6. Save concise command/API results and failures; do not publish PHI, tokens,
+   or secrets.
+
+**Exit criteria:** representative HAPI create/read/update/validation
+operations pass, references resolve, and an authorized synthetic workflow
+succeeds while out-of-scope, expired, and revoked access is denied.
 
 ### Phase 3 — Verify Fabric provenance end to end
 
@@ -126,23 +129,7 @@ test matrix, using synthetic users.
 **Exit criteria:** a live event is independently visible on the test ledger,
 retries do not create unintended duplicate events, and no PHI/PII is recorded.
 
-### Phase 4 — Complete functional and security evaluation
-
-1. Run the backend suites, frontend production build, migration checks, and
-   both Go module tests against the candidate revision.
-2. Create an authorization matrix for each role and protected resource/action.
-3. Test consent boundaries: allowed scope, out-of-scope resource, expiry,
-   revocation, cross-patient access, wrong lab, and unassigned technician.
-4. Run the ZAP baseline against the controlled local deployment; review every
-   alert and record accepted risks and fixes.
-5. Investigate the existing broken audit-chain warning from entry #33 without
-   changing historical records; document root cause and resolution status.
-
-**Exit criteria:** repeatable tests pass, unauthorized cases are denied, audit
-integrity behavior is documented, and ZAP results are reviewed rather than
-reported as raw untriaged alerts.
-
-### Phase 5 — Measure performance and ledger overhead
+### Phase 4 — Measure scalability and ledger overhead
 
 1. Record software versions, hardware, Docker resource limits, database,
    enabled integrations, test data scale, workload, duration, and warm-up.
@@ -158,6 +145,20 @@ reported as raw untriaged alerts.
 **Exit criteria:** results are repeatable, have stated test conditions, and
 include both successful and failed-request behavior without exposing tokens or
 clinical data.
+
+### Phase 5 — Run a controlled OWASP ZAP assessment
+
+1. Run the ZAP baseline only against the controlled local deployment.
+2. Triage each alert, distinguish confirmed issues from false positives, and
+   record accepted risks and scoped remediations.
+3. Rerun relevant tests and the baseline after fixes.
+4. Investigate the existing broken audit-chain warning from entry #33 without
+   changing historical records; document the root cause and resolution status.
+
+**Exit criteria:** repeatable tests pass, unauthorized cases are denied, audit
+integrity behavior is documented, and ZAP findings are reviewed rather than
+reported as raw untriaged alerts. A baseline scan is not a full penetration
+test.
 
 ### Phase 6 — Operational readiness and documentation
 
@@ -178,10 +179,10 @@ clinical system.
 
 ## Recommended immediate next action
 
-Complete **Phase 1** first: the HAPI server and schema are ready, but the
-abstract's FHIR interoperability claim needs resource-level evidence. Use
-synthetic data and test through the application/API integration path, not only
-by reading the metadata endpoint.
+Continue **Phase 1** with live Keycloak PKCE, refresh, logout, and provisioning
+verification. Local auth/OIDC negative tests pass, but the current workspace
+does not have Docker or a responding local API, so live identity and HAPI
+checks must be repeated when those services are available.
 
 ## Evidence and reporting rules
 

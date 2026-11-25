@@ -185,6 +185,19 @@ func TestConvertOutboxEventPreservesNullableFieldsAsNull(t *testing.T) {
 	}
 }
 
+func TestConvertOutboxEventRejectsUnapprovedEventType(t *testing.T) {
+	outbox := OutboxEvent{
+		EventID:     "550e8400-e29b-41d4-a716-446655440000",
+		EventType:   "UNREVIEWED_EVENT",
+		ActorRef:    "actor-001",
+		OccurredAt:  "2026-01-02T03:04:05Z",
+		PayloadHash: strings.Repeat("a", 64),
+	}
+	if _, err := convertOutboxEvent(outbox); err == nil {
+		t.Fatal("unapproved event type was accepted")
+	}
+}
+
 func TestFabricSubmitterRetriesReturnPriorCommittedTransaction(t *testing.T) {
 	records := map[string]*storedEvent{}
 	submits := 0
@@ -251,7 +264,7 @@ func TestFabricSubmitterResolvesConcurrentCommitAfterSubmitError(t *testing.T) {
 
 const validEventJSON = `{
   "eventId":"550e8400-e29b-41d4-a716-446655440000",
-  "eventType":"clinical.resource.created",
+  "eventType":"SERVICE_REQUEST_CREATED",
   "actorRef":"clinician-456",
   "subjectRef":"patient-123",
   "resourceRef":"resource-789",

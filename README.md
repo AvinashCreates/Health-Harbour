@@ -116,10 +116,11 @@ The current-stack k6 runner ramps through 10, 30, and 50 virtual users and
 can include an authenticated, role-appropriate read endpoint. It saves a
 JSON summary under `security/reports`; see
 [`RESEARCH_EVALUATION.md`](./RESEARCH_EVALUATION.md) for controlled test
-commands and reporting requirements. `backend/loadtest.py` provides a
-Python-only GET smoke load at concurrency 1, 10, and 50. Neither runner writes
-clinical data. Do not treat old prototype benchmark numbers as current
-results.
+commands and reporting requirements. Both shell runners are restricted to
+loopback targets. `backend/loadtest.py` provides a Python-only GET smoke load
+at concurrency 1, 10, and 50 and now also validates that the target is a
+loopback origin. Neither runner writes clinical data. Do not treat old
+prototype benchmark numbers as current results.
 
 ## PostgreSQL Compose deployment
 
@@ -235,12 +236,16 @@ produced.
 
 ## Security and scalability notes
 
-- `JWT_SECRET` must be at least 32 characters when `APP_ENV=production`.
+- In production, set `JWT_SECRET` to a unique secret of at least 32 characters;
+  startup rejects missing or documented development placeholder values.
 - `CORS_ORIGINS` is an explicit comma-separated allowlist.
 - API responses include no-store and baseline browser security headers.
 - Passwords are bcrypt-hashed in local mode. Synthetic data only; do not use
   this prototype to store real patient data.
 - The local login rate limiter is process-local and is not shared across API
   workers. Use a shared limiter before horizontal production scaling.
+- The supplied ZAP and k6 runners refuse non-loopback targets and are intended
+  for controlled local evaluation only. A ZAP baseline is not a full
+  penetration test; no current scan or meaningful load result is available.
 - Organization-level authorization beyond lab-to-technician membership and
   formal production hardening remain future work.

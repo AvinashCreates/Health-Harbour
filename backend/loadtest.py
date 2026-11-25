@@ -10,11 +10,13 @@ Required setup:
     LOAD_TEST_READ_PATH=/auth/me  # optional, must be authorized for the token
 """
 import asyncio
+import ipaddress
 import json
 import os
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -24,6 +26,25 @@ AUTH_PATH = os.getenv("LOAD_TEST_READ_PATH", "/auth/me")
 CONCURRENCY_LEVELS = (1, 10, 50)
 REQUESTS_PER_LEVEL = int(os.getenv("LOAD_TEST_REQUESTS", "100"))
 OUTPUT_PATH = Path(os.getenv("LOAD_TEST_OUTPUT", "/tmp/healthharbor-loadtest.json"))
+
+
+def validate_local_target(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("LOAD_TEST_URL must be an HTTP(S) loopback URL")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("LOAD_TEST_URL must not include credentials, query, or fragment")
+    if parsed.path not in {"", "/"}:
+        raise ValueError("LOAD_TEST_URL must be an origin without a path")
+
+    hostname = parsed.hostname.lower()
+    try:
+        is_loopback = ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        is_loopback = hostname == "localhost"
+    if not is_loopback:
+        raise ValueError("Refusing non-loopback load-test target")
+    return url.rstrip("/")
 
 
 async def timed_get(client: httpx.AsyncClient, path: str, headers=None):
@@ -75,6 +96,11 @@ async def main():
         raise ValueError("LOAD_TEST_REQUESTS must be a positive integer")
     if not AUTH_PATH.startswith("/") or AUTH_PATH.startswith("//"):
         raise ValueError("LOAD_TEST_READ_PATH must be an absolute API path")
+    try:
+        target_url = validate_local_target(BASE_URL)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
 
     headers = {"Authorization": f"Bearer {AUTH_TOKEN}"} if AUTH_TOKEN else None
     results = []
@@ -82,7 +108,7 @@ async def main():
     timeout = httpx.Timeout(30.0, connect=5.0)
 
     async with httpx.AsyncClient(
-        base_url=BASE_URL,
+        base_url=target_url,
         limits=limits,
         timeout=timeout,
         follow_redirects=False,
@@ -126,4 +152,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    try:
+        exit_code = asyncio.run(main())
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        exit_code = 2
+    raise SystemExit(exit_code)

@@ -72,7 +72,7 @@ def decode_keycloak_token(token: str) -> dict[str, Any]:
         raise JWTError("No matching Keycloak signing key")
 
     signing_key = jwk.construct(matching, algorithm="RS256")
-    return jwt.decode(
+    claims = jwt.decode(
         token,
         signing_key,
         algorithms=["RS256"],
@@ -80,6 +80,18 @@ def decode_keycloak_token(token: str) -> dict[str, Any]:
         audience=settings["audience"],
         options={"require_exp": True, "require_iss": True, "require_sub": True},
     )
+    audience = claims.get("aud")
+    if not (
+        audience == settings["audience"]
+        or (
+            isinstance(audience, list)
+            and settings["audience"] in audience
+        )
+    ):
+        raise JWTError("Token audience is missing or invalid")
+    if not isinstance(claims.get("sub"), str) or not claims["sub"].strip():
+        raise JWTError("Token subject is missing or invalid")
+    return claims
 
 
 def map_keycloak_role(claims: dict[str, Any]) -> str | None:
@@ -95,12 +107,12 @@ def map_keycloak_role(claims: dict[str, Any]) -> str | None:
     realm_roles = realm_access.get("roles", []) if isinstance(realm_access, dict) else []
     if not isinstance(realm_roles, list):
         return None
-    priorities = ("ADMIN", "LAB_SUPERVISOR", "LAB", "PHYSICIAN", "LAB_TECHNICIAN", "PATIENT")
-    return next((
-        role_map[role]
-        for role in priorities
-        if any(isinstance(candidate, str) and candidate == role for candidate in realm_roles)
-    ), None)
+    mapped_roles = {
+        role_map[candidate]
+        for candidate in realm_roles
+        if isinstance(candidate, str) and candidate in role_map
+    }
+    return next(iter(mapped_roles)) if len(mapped_roles) == 1 else None
 
 
 def reset_jwks_cache() -> None:
