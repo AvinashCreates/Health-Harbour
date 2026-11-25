@@ -12,7 +12,11 @@ import schemas
 from database import get_db
 from deps import get_current_user, require_roles
 from services import audit_logger, fhir_builder
-from services.fhir_server import authoritative_resource, persist_resource
+from services.fhir_server import (
+    authoritative_resource,
+    persist_resource,
+    restore_resource_from_mirror,
+)
 
 router = APIRouter(prefix="/fhir", tags=["fhir"])
 
@@ -104,6 +108,20 @@ def _load_request(db: Session, workflow: models.LaboratoryWorkflow) -> models.FH
     ).first()
     if request is None:
         raise HTTPException(status_code=404, detail="ServiceRequest not found")
+    request.resource_data = restore_resource_from_mirror(
+        "ServiceRequest",
+        request.fhir_id,
+        request.resource_data,
+        lambda resource_type, resource_id: (
+            db.query(models.FHIRResource.resource_data)
+            .filter(
+                models.FHIRResource.resource_type == resource_type,
+                models.FHIRResource.fhir_id == resource_id,
+            )
+            .scalar()
+        ),
+    )
+    db.flush()
     return request
 
 
@@ -347,7 +365,7 @@ def list_service_requests(
         }))
         results.append({
             "id": request.id,
-            "resource": authoritative_resource("ServiceRequest", request.fhir_id, request.resource_data),
+            "resource": request.resource_data,
             "created_at": request.created_at,
             "workflow_status": workflow.status,
             "technician_id": workflow.technician_id,

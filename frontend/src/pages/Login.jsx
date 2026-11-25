@@ -39,25 +39,13 @@ export default function Login({ onAuthed, oidc, authError }) {
       <div className="auth-layout">
         <section className="auth-story">
           <a className="brand brand-light" href="/">
-            <span className="brand-mark" aria-hidden="true">H</span>
+            <span className="brand-mark" aria-hidden="true">+</span>
             <span>HealthHarbor <small>Care, connected</small></span>
           </a>
           <div className="story-copy">
             <span className="story-kicker">CONNECTED CARE, WITH YOUR PERMISSION</span>
             <h1>Better connected.<br />Patient controlled.</h1>
             <p>HealthHarbor helps patients, physicians, and laboratories exchange the right records through clear, time-limited permissions.</p>
-            <div className="exchange-graphic" role="img" aria-label="Patients share selected records with physicians, who coordinate laboratory workflows">
-              <svg className="exchange-lines" viewBox="0 0 520 175" aria-hidden="true">
-                <path d="M92 88 C165 20 240 20 300 88" />
-                <path d="M92 88 C165 156 240 156 300 88" />
-                <path d="M300 88 C360 30 420 30 470 88" />
-                <path d="M300 88 C360 146 420 146 470 88" />
-              </svg>
-              <div className="exchange-node patient-node"><span className="node-icon">P</span><strong>Patient</strong><small>Chooses access</small></div>
-              <div className="exchange-center"><span aria-hidden="true">✓</span><strong>Consent</strong><small>Scoped &amp; timed</small></div>
-              <div className="exchange-node doctor-node"><span className="node-icon">D</span><strong>Physician</strong><small>Coordinates care</small></div>
-              <div className="exchange-node lab-node"><span className="node-icon">L</span><strong>Laboratory</strong><small>Returns results</small></div>
-            </div>
             <div className="story-points">
               <span><b>01</b> You choose what to share</span>
               <span><b>02</b> Care teams follow a clear workflow</span>

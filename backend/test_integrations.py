@@ -16,8 +16,14 @@ from sqlalchemy.pool import StaticPool
 import database
 from main import app
 import models
+from database import get_db
+from deps import get_current_user
 from services import fhir_builder, ledger, oidc
-from services.fhir_server import FHIRIntegrationError, persist_resource
+from services.fhir_server import (
+    FHIRIntegrationError,
+    persist_resource,
+    restore_resource_from_mirror,
+)
 
 
 def _b64url(value: int) -> str:
@@ -174,6 +180,147 @@ class FHIRIntegrationTests(unittest.TestCase):
     def test_rejects_unknown_mode_instead_of_falling_back(self):
         with self.assertRaises(FHIRIntegrationError):
             persist_resource({"resourceType": "Patient", "id": "p1"})
+
+    @patch.dict(os.environ, {"FHIR_MODE": "hapi", "FHIR_SERVER_URL": "http://hapi/fhir"})
+    @patch("services.fhir_server.persist_resource")
+    @patch("services.fhir_server.retrieve_resource", return_value=None)
+    def test_restores_missing_resource_dependencies_before_request(self, retrieve, persist):
+        patient = {"resourceType": "Patient", "id": "p1", "meta": {"versionId": "4"}}
+        service_request = {
+            "resourceType": "ServiceRequest",
+            "id": "sr1",
+            "subject": {"reference": "Patient/p1"},
+            "meta": {"versionId": "7", "lastUpdated": "2030-01-01T00:00:00Z"},
+        }
+        persisted = []
+
+        def persist_mirror(resource):
+            persisted.append(resource)
+            return resource
+
+        persist.side_effect = persist_mirror
+        result = restore_resource_from_mirror(
+            "ServiceRequest",
+            "sr1",
+            service_request,
+            lambda resource_type, resource_id: (
+                patient if (resource_type, resource_id) == ("Patient", "p1") else None
+            ),
+        )
+
+        self.assertEqual([resource["resourceType"] for resource in persisted], ["Patient", "ServiceRequest"])
+        self.assertNotIn("versionId", persisted[0]["meta"])
+        self.assertNotIn("versionId", persisted[1]["meta"])
+        self.assertNotIn("lastUpdated", persisted[1]["meta"])
+        self.assertEqual(result["id"], "sr1")
+        self.assertGreaterEqual(retrieve.call_count, 3)
+
+    @patch.dict(os.environ, {"FHIR_MODE": "hapi", "FHIR_SERVER_URL": "http://hapi/fhir"})
+    @patch("services.fhir_server.persist_resource")
+    @patch("services.fhir_server.retrieve_resource", return_value=None)
+    def test_reports_missing_local_reference_when_resource_cannot_be_restored(self, _, persist):
+        service_request = {
+            "resourceType": "ServiceRequest",
+            "id": "sr1",
+            "subject": {"reference": "Patient/p1"},
+        }
+
+        with self.assertRaisesRegex(FHIRIntegrationError, "Patient/p1 is missing from the local mirror"):
+            restore_resource_from_mirror("ServiceRequest", "sr1", service_request, lambda *_: None)
+
+        persist.assert_not_called()
+
+    @patch.dict(os.environ, {"FHIR_MODE": "hapi", "FHIR_SERVER_URL": "http://hapi/fhir"})
+    @patch("services.fhir_server.persist_resource", side_effect=lambda resource: resource)
+    @patch("services.fhir_server.retrieve_resource", return_value=None)
+    def test_service_request_list_recovers_missing_hapi_resource(self, _, persist):
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        models.Base.metadata.create_all(bind=engine)
+        session_factory = sessionmaker(bind=engine)
+        db = session_factory()
+        patient = models.User(
+            id="patient-local", full_name="Test Patient", email="patient@example.test",
+            hashed_password="unused", role="patient",
+        )
+        doctor = models.User(
+            id="doctor-local", full_name="Test Doctor", email="doctor@example.test",
+            hashed_password="unused", role="doctor",
+        )
+        laboratory = models.User(
+            id="lab-local", full_name="Test Laboratory", email="lab@example.test",
+            hashed_password="unused", role="lab",
+        )
+        db.add_all([patient, doctor, laboratory])
+        db.flush()
+        resources = [
+            ("Patient", "patient-fhir", {"resourceType": "Patient", "id": "patient-fhir"}),
+            ("Practitioner", "doctor-fhir", {"resourceType": "Practitioner", "id": "doctor-fhir"}),
+            ("Organization", "lab-fhir", {"resourceType": "Organization", "id": "lab-fhir"}),
+        ]
+        for resource_type, fhir_id, data in resources:
+            db.add(models.FHIRResource(
+                resource_type=resource_type,
+                fhir_id=fhir_id,
+                resource_data=data,
+                owner_id=patient.id if resource_type == "Patient" else None,
+                created_by=doctor.id,
+            ))
+        request = models.FHIRResource(
+            id="request-local",
+            resource_type="ServiceRequest",
+            fhir_id="request-fhir",
+            resource_data={
+                "resourceType": "ServiceRequest",
+                "id": "request-fhir",
+                "status": "active",
+                "intent": "order",
+                "code": {"text": "CBC"},
+                "subject": {"reference": "Patient/patient-fhir"},
+                "requester": {"reference": "Practitioner/doctor-fhir"},
+                "performer": [{"reference": "Organization/lab-fhir"}],
+            },
+            owner_id=patient.id,
+            created_by=doctor.id,
+        )
+        db.add(request)
+        db.flush()
+        db.add(models.LaboratoryWorkflow(
+            service_request_id=request.id,
+            patient_id=patient.id,
+            physician_id=doctor.id,
+            laboratory_id=laboratory.id,
+            status="REQUESTED",
+        ))
+        db.commit()
+        previous_overrides = app.dependency_overrides.copy()
+
+        def override_db():
+            session = session_factory()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_current_user] = lambda: laboratory
+        try:
+            with TestClient(app) as client:
+                response = client.get("/fhir/ServiceRequest")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()[0]["resource"]["id"], "request-fhir")
+            self.assertCountEqual(
+                [call.args[0]["resourceType"] for call in persist.call_args_list],
+                ["Patient", "Practitioner", "Organization", "ServiceRequest"],
+            )
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(previous_overrides)
+            db.close()
+            engine.dispose()
 
 
 class FabricOutboxTests(unittest.TestCase):

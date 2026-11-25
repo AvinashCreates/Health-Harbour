@@ -23,14 +23,18 @@ export default function LabDashboard({ token, user }) {
   const [message, setMessage] = useState('')
   const [err, setErr] = useState('')
   const [busyId, setBusyId] = useState('')
+  const [loading, setLoading] = useState(true)
   const isTechnician = user.role === 'lab_technician'
 
   async function refresh() {
+    setLoading(true)
+    setErr('')
     try {
       setRequests(await api.listServiceRequests(token))
-      setErr('')
     } catch (e) {
       setErr(e.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -90,7 +94,13 @@ export default function LabDashboard({ token, user }) {
       <section className="card">
         <p className="eyebrow">{isTechnician ? 'ASSIGNED WORK' : 'LABORATORY QUEUE'}</p>
         <h2>{isTechnician ? 'Your assigned work' : 'Requests assigned to your laboratory'}</h2>
-        {requests.length === 0 && <p className="muted">Nothing needs your attention right now.</p>}
+        {loading && <p className="muted" role="status">Loading laboratory requests…</p>}
+        {!loading && !err && requests.length === 0 && (
+          <div className="empty-state" role="status">
+            <strong>Nothing needs your attention right now</strong>
+            <p className="muted">New requests assigned to your laboratory will appear here.</p>
+          </div>
+        )}
         {requests.map((request) => {
           const status = request.workflow_status
           const busy = busyId === request.id

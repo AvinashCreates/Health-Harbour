@@ -135,7 +135,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="HealthHarbor home">
-          <span className="brand-mark" aria-hidden="true">H</span>
+          <span className="brand-mark" aria-hidden="true">+</span>
           <span>HealthHarbor <small>Care, connected</small></span>
         </a>
         <div className="who">
@@ -145,7 +145,7 @@ export default function App() {
           <button className="btn-ghost" onClick={handleLogout}>Sign out</button>
         </div>
       </header>
-      <main className="content">
+      <main className={`content ${activeSection === 'overview' ? 'home-screen' : ''}`}>
         <section className="workspace-heading">
           <div>
             <p className="eyebrow">{roleLabel} portal</p>

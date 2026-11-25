@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin
 
 import httpx
@@ -213,3 +213,78 @@ def authoritative_resource(resource_type: str, resource_id: str, local_data: dic
             status_code=404,
         )
     return resource
+
+
+def restore_resource_from_mirror(
+    resource_type: str,
+    resource_id: str,
+    local_data: dict[str, Any],
+    lookup_local: Callable[[str, str], dict[str, Any] | None],
+) -> dict[str, Any]:
+    if fhir_mode() == "local":
+        return local_data
+    return _restore_resource_from_mirror(
+        resource_type,
+        resource_id,
+        local_data,
+        lookup_local,
+        restoring=set(),
+    )
+
+
+def _restore_resource_from_mirror(
+    resource_type: str,
+    resource_id: str,
+    local_data: dict[str, Any],
+    lookup_local: Callable[[str, str], dict[str, Any] | None],
+    restoring: set[tuple[str, str]],
+) -> dict[str, Any]:
+    key = (resource_type, resource_id)
+    if key in restoring:
+        raise FHIRIntegrationError(
+            f"Cannot restore cyclic FHIR references involving {resource_type}/{resource_id}",
+            status_code=422,
+        )
+
+    existing = retrieve_resource(resource_type, resource_id)
+    if existing is not None:
+        return existing
+
+    if local_data.get("resourceType") != resource_type or local_data.get("id") != resource_id:
+        raise FHIRIntegrationError(
+            f"Local FHIR mirror does not match {resource_type}/{resource_id}",
+            status_code=409,
+        )
+
+    restoring.add(key)
+    try:
+        for referenced_type, referenced_id in set(_referenced_resources(local_data)):
+            if (referenced_type, referenced_id) == key:
+                continue
+            if retrieve_resource(referenced_type, referenced_id) is not None:
+                continue
+            referenced_data = lookup_local(referenced_type, referenced_id)
+            if referenced_data is None:
+                raise FHIRIntegrationError(
+                    f"Cannot restore {resource_type}/{resource_id}: referenced "
+                    f"{referenced_type}/{referenced_id} is missing from the local mirror",
+                    status_code=409,
+                )
+            _restore_resource_from_mirror(
+                referenced_type,
+                referenced_id,
+                referenced_data,
+                lookup_local,
+                restoring,
+            )
+
+        resource_to_restore = dict(local_data)
+        metadata = resource_to_restore.get("meta")
+        if isinstance(metadata, dict):
+            resource_to_restore["meta"] = {
+                key: value for key, value in metadata.items()
+                if key not in {"versionId", "lastUpdated"}
+            }
+        return persist_resource(resource_to_restore)
+    finally:
+        restoring.remove(key)
