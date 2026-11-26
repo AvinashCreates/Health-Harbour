@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import CheckConstraint, Column, String, DateTime, ForeignKey, JSON, Integer, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, String, DateTime, ForeignKey, JSON, Integer, UniqueConstraint, text
 from database import Base
 
 
@@ -61,10 +61,25 @@ class Consent(Base):
     id = Column(String, primary_key=True, default=gen_uuid)
     patient_id = Column(String, ForeignKey("users.id"), nullable=False)
     grantee_id = Column(String, ForeignKey("users.id"), nullable=False)
+    organization_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     resource_types = Column(JSON, nullable=False)  # list[str]
+    purpose = Column(String, nullable=False, default="TREATMENT", server_default=text("'TREATMENT'"))
     granted_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "practitioner_id", name="uq_org_practitioner"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    organization_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    practitioner_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_by = Column(String, ForeignKey("users.id"), nullable=False)
+    active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class LaboratoryWorkflow(Base):
@@ -124,6 +139,15 @@ class IdempotencyRecord(Base):
     request_fingerprint = Column(String, nullable=False)
     service_request_id = Column(String, ForeignKey("fhir_resources.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LoginRateLimit(Base):
+    __tablename__ = "login_rate_limits"
+    key_hash = Column(String, primary_key=True)
+    failure_count = Column(Integer, nullable=False)
+    window_started_at = Column(DateTime, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class LedgerOutbox(Base):

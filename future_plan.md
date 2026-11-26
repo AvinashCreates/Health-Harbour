@@ -164,8 +164,9 @@ test.
 
 1. Verify PostgreSQL backup and restore, file-volume backup, startup ordering,
    and recovery after service interruption without deleting persistent data.
-2. Replace process-local login rate limiting with shared storage before
-   horizontal API scaling.
+2. Verify the database-backed login rate limiter against PostgreSQL, including
+   fail-closed behavior and cleanup under sustained load, before horizontal
+   API scaling.
 3. Review organization-level authorization, secrets management, encryption,
    logging/retention, file malware scanning, monitoring, and deployment
    access controls.

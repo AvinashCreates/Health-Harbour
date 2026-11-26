@@ -1,0 +1,104 @@
+# Architecture review
+
+## Repository and runtime layout
+
+The active Git branch at review time is `main`. Existing uncommitted changes
+were present; in particular, user-edited `prompt.md` and `result.md` were
+preserved and not normalized or reverted.
+
+- `backend/` contains the FastAPI application, SQLAlchemy models, Alembic
+  migrations, API routers, FHIR/ledger services, and Python test suites.
+- `frontend/` contains the Vite/React application, role-specific workspaces,
+  Keycloak JS adapter, and API client.
+- `deployment/keycloak/` contains the Keycloak realm import.
+- `deployment/postgres/init/` creates the PostgreSQL roles and separate
+  application, Keycloak, and HAPI databases on first volume initialization.
+- `fabric/chaincode/` and `fabric/adapter/` are separate Go modules.
+- `security/` contains the loopback-restricted ZAP and k6 runners and the
+  current-stack k6 scenario.
+- `docker-compose.yml` runs PostgreSQL and the backend by default. Keycloak,
+  HAPI, and the Fabric adapter are opt-in Compose profiles. Vite runs outside
+  Compose.
+
+## Application boundaries
+
+1. The React application calls the API through `frontend/src/api.js`. In local
+   development, the default API origin uses IPv4 loopback because Compose
+   publishes the API on `127.0.0.1:8000`.
+2. FastAPI routers own authentication, patient consent, FHIR workflows,
+   clinical files, and audit endpoints. Dependencies enforce identity and
+   role checks; resource authorization is performed in backend services and
+   route handlers.
+3. SQLAlchemy stores application profiles, FHIR mirrors/indexes, consent,
+   workflow transitions, file metadata, memberships, idempotency records,
+   audit entries, and the Fabric outbox in PostgreSQL (or SQLite for isolated
+   local tests).
+4. `services/fhir_server.py` handles HAPI readiness, reference checks,
+   `$validate`, reads, writes, version-aware updates, and mirror recovery.
+   HAPI is authoritative in HAPI mode; the database mirror supports local
+   authorization and workflow indexing.
+5. `services/ledger.py` delivers allowlisted provenance events from the
+   transactional outbox to the Go HTTP adapter. Go chaincode verifies and
+   persists permitted events; a successful outbox delivery is distinct from
+   a live-ledger verification until commit is confirmed.
+6. Clinical file bytes are stored in the separate `clinical_files` volume,
+   not in PostgreSQL or Fabric. The database stores metadata and a digest.
+7. `services/audit_logger.py` maintains the application hash chain. It is
+   separate from the Fabric ledger and does not repair historical records.
+
+## Identity and authorization
+
+- Local authentication issues backend JWTs. Keycloak mode uses the public
+  browser client and PKCE, while the API validates issuer, audience, signature,
+  expiry, subject, and application role.
+- Patients control resource-scoped, expiring, revocable grants. The
+  organization policy requires a named physician with active
+  administrator-managed membership; organization grants are treatment-only.
+- Labs and technicians are tied to explicit workflows, membership, assignment,
+  and state transitions. Administrator routes do not provide clinical-record
+  access.
+- The database remains the authorization index; live HAPI or Fabric
+  availability does not replace API-side checks.
+
+## Persistence and startup
+
+- PostgreSQL has persistent `pgdata`; clinical bytes have persistent
+  `clinical_files`.
+- Compose runs `alembic upgrade head` before starting the API and health-checks
+  PostgreSQL before dependent services start.
+- PostgreSQL auto-schema creation is disabled for the backend. SQLite local
+  tests can use the development auto-create path.
+- The organization-consent migration has been tested on fresh SQLite. Its
+  application to the existing PostgreSQL database has not been performed in
+  this environment.
+
+## Verification snapshot and limitations
+
+- The current implementation pass passed 34 focused backend unit tests, both
+  isolated API/security smoke suites, and a fresh SQLite migration plus
+  `alembic check`.
+- User-provided runtime evidence previously verified PostgreSQL connectivity,
+  HAPI R4 metadata/readiness, and local API login. No live HAPI workflow,
+  Keycloak browser flow, or Fabric ledger commit is established by those
+  checks.
+- The supplied browser tab reported repeated Vite WebSocket
+  `ERR_CONNECTION_REFUSED` events. The frontend server was not restarted by
+  this review.
+- Docker, Node/npm, Go, and k6 are unavailable in the current environment.
+- The user-reported PostgreSQL audit history has a genuine break beginning at
+  #33. Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged.
+
+## Architecture concerns to track
+
+- API authorization must remain the source of enforcement; React visibility
+  and FHIR Consent records are not sufficient by themselves.
+- Login throttling now uses shared database state and atomic upserts, with
+  focused SQLite concurrency tests. Verify the migration on PostgreSQL and add
+  network-level abuse controls before claiming full horizontal production
+  readiness.
+- HAPI recovery and consistency between authoritative FHIR resources and
+  relational workflow mirrors need live failure/restart tests.
+- Fabric adapter identity, peer endorsement, commit confirmation, duplicate
+  delivery, and restart/retry behavior need a deployed local network test.
+- PostgreSQL and file-volume backup/restore must be verified without
+  overwriting the user's existing data.

@@ -1,114 +1,260 @@
-# MASTER DEVELOPMENT PROMPT — WIRACHAIN
+# ROLE: Senior Full-Stack Engineer, Healthcare Interoperability Architect, DevSecOps Engineer
 
-## Project Title
-**A SECURE, CONSENT-AWARE FHIR AND PERMISSIONED BLOCKCHAIN FRAMEWORK FOR INTEROPERABLE HEALTHCARE DATA EXCHANGE AMONG PATIENTS, PHYSICIANS AND CLINICAL LABORATORIES**
+You are responsible for completing my existing final-year project, **HealthHarbor**, into a fully integrated, demonstrable healthcare interoperability platform.
 
-Act as a senior software architect, healthcare interoperability engineer, cybersecurity engineer, blockchain developer, database architect and full-stack development lead.
+Work directly inside the existing repository using GitHub Copilot Agent mode in VS Code.
 
-Your responsibility is to DESIGN, IMPLEMENT, TEST AND DELIVER a complete, functional, integrated full-stack research prototype called **WiraChain**, strictly aligned with the attached project abstract.
+You must inspect the existing source code, understand the architecture, identify incomplete implementations, and finish the project systematically.
 
-This is not a generic hospital management system, patient CRUD application, appointment booking platform or simple role-based dashboard.
-
-I want the actual research concept implemented end to end.
-
-I am providing:
-1. My original project abstract, which is the authoritative statement of requirements.
-2. My existing project ZIP, which contains an earlier implementation. Treat it as legacy reference material. Inspect it, reuse genuinely useful components where appropriate, but do not allow its limitations to determine the new architecture.
-
-Do not merely generate a project plan, architecture document, UI mockup or isolated code snippets. Build the complete application.
+Do NOT rebuild the project from scratch.
+Do NOT replace working modules with generic implementations.
+Do NOT remove existing features.
+Do NOT introduce unnecessary technologies or architectural complexity.
 
 ---
 
-# 1. CORE RESEARCH OBJECTIVE
+# 1. PROJECT OBJECTIVE
 
-Build a secure, consent-aware healthcare information exchange framework that connects:
+HealthHarbor is a secure, consent-aware healthcare data exchange platform connecting:
 
 - Patients
 - Physicians
-- Clinical laboratories
+- Healthcare organizations
+- Laboratory supervisors
 - Laboratory technicians
 - Administrators
 
-The system must provide interoperable healthcare information exchange using HL7 FHIR resources, enforce fine-grained patient-controlled consent, implement secure laboratory workflows, and use Hyperledger Fabric as a genuine permissioned blockchain for selected audit, consent and integrity events.
+The system uses HL7 FHIR R4 for healthcare interoperability, Keycloak for identity management, PostgreSQL for persistence, and Hyperledger Fabric for selected audit and provenance events.
 
-Clinical data must remain off-chain in secure storage. Blockchain must provide tamper-evident provenance, not act as the clinical database.
+Its primary objective is to let patients control access to their healthcare records while supporting secure collaboration between healthcare professionals and organizations.
 
-# 2. MANDATORY TECHNOLOGY STACK
+Use synthetic patient and clinical data exclusively.
 
-Use the following technologies:
+# 2. EXISTING TECHNOLOGY STACK
 
-| Layer | Technology |
-|---|---|
-| Frontend | React.js |
-| Backend | Python FastAPI |
-| Identity management | Keycloak |
-| Authentication | OAuth 2.0 / OpenID Connect |
-| Healthcare interoperability | HL7 FHIR R4 |
-| FHIR server | HAPI FHIR |
-| Application database | PostgreSQL |
-| Blockchain | Hyperledger Fabric |
-| Chaincode | Go |
-| Frontend styling | Modern responsive CSS / Tailwind CSS |
-| API documentation | OpenAPI / Swagger |
-| Performance testing | k6 or Apache JMeter |
-| Security testing | OWASP ZAP |
-| API testing | Postman / automated tests |
-| Containerization | Docker and Docker Compose |
+Preserve the current technology stack:
 
-Do not replace mandatory components with simulated equivalents.
+Frontend:
+- React
+- Existing Vite setup
+- Existing CSS and UI components
 
-In particular:
-- A hash-chained PostgreSQL table is not Hyperledger Fabric.
-- FHIR-shaped JSON is not sufficient evidence of HAPI FHIR interoperability.
-- JWT authentication alone is not Keycloak integration.
-- A mock blockchain service is not an implemented permissioned blockchain.
+Backend:
+- Python
+- FastAPI
+- SQLAlchemy
+- Alembic
+- PostgreSQL
 
-If an infrastructure component cannot run in the development environment, still implement its genuine integration, provide reproducible deployment configuration and clearly document the limitation. Never falsely claim it is operational.
+Authentication:
+- Keycloak
+- OpenID Connect
+- OAuth 2.0 Authorization Code Flow with PKCE
+- JWT validation
 
-Use FHIR R4 consistently throughout the implementation.
+Healthcare interoperability:
+- HAPI FHIR R4
+- HL7 FHIR resources
 
-# 3. PATIENT-CONTROLLED CONSENT MANAGEMENT
+Blockchain:
+- Hyperledger Fabric
+- Go chaincode
+- Existing HTTP Gateway adapter
+- Transactional outbox
 
-This is one of the most important parts of WiraChain.
+Infrastructure:
+- Docker
+- Docker Compose
+- Existing environment configuration
 
-Implement a dedicated consent management engine.
+Testing:
+- Python unittest
+- Existing frontend build scripts
+- OWASP ZAP
+- k6
 
-Patients must be able to:
+Do not change the technology stack without a demonstrated technical necessity.
 
-1. View their healthcare information.
-2. Select a specific physician.
-3. Select the categories or specific resources the physician may access.
-4. Grant permission for a defined period.
-5. Set a maximum access duration of 30 days.
-6. View active permissions.
-7. Revoke permission before its expiration.
-8. Review expired and revoked permissions.
-9. View who accessed their records, when and for what purpose.
+# 3. IMPORTANT EXISTING IMPLEMENTATION
 
-The backend must enforce these permissions.
+Before making changes, inspect:
 
-Required rules:
+- PROJECT_STATUS.md
+- README.md
+- Backend source
+- Frontend source
+- Database models
+- Alembic migrations
+- API routes
+- Authentication services
+- Consent authorization services
+- FHIR integration
+- Fabric chaincode and adapter
+- Docker Compose files
+- Keycloak realm configuration
+- Existing tests
+- Security scripts
 
-- Default-deny authorization.
-- Consent must be specific to the patient and authorized physician.
-- Consent must include permitted resource scope.
-- Consent must include validity start and end times.
-- The server must enforce the 30-day maximum.
-- Expired consent must automatically become ineffective.
-- Early revocation must immediately prevent subsequent access.
-- The frontend must never be trusted to enforce authorization.
-- Cached authorization must not bypass revocation.
-- Every relevant consent action must generate an auditable event.
+The project already has substantial implementation.
 
-Implement the FHIR R4 Consent resource and map its lifecycle correctly to the application's consent states.
+Existing features include:
 
-Do not confuse authentication, RBAC, resource assignment and patient consent. They are separate authorization requirements.
+1. Role-based authentication.
+2. Patient-only local registration.
+3. Administrator-provisioned staff.
+4. Patient consent management.
+5. Resource-specific consent.
+6. Consent expiry and immediate revocation.
+7. Physician-specific and organization-based consent.
+8. Administrator-managed organization memberships.
+9. Named-practitioner organization access.
+10. Treatment-only organization grants.
+11. Laboratory workflow.
+12. Clinical file management.
+13. Off-chain clinical document storage.
+14. Local audit hash-chain verification.
+15. HAPI FHIR integration.
+16. Keycloak integration.
+17. Hyperledger Fabric chaincode and adapter.
+18. PostgreSQL and Alembic migrations.
+19. OWASP ZAP runner.
+20. k6 load-testing runner.
 
-# 4. FHIR INTEROPERABILITY
+Treat these as existing capabilities to verify and complete, not as reasons to recreate them.
 
-Integrate a real HAPI FHIR R4 server.
+# 4. TEMPORARILY DEFERRED ISSUE
 
-Implement and validate these FHIR resources:
+The historical audit-chain integrity mismatch beginning at entry #33 is explicitly OUT OF SCOPE for this implementation pass.
+
+Do not:
+
+- Modify historical audit records.
+- Rewrite historical hashes.
+- Reset the audit database.
+- Delete audit entries.
+- Attempt to conceal historical verification failures.
+- Spend implementation time investigating the #33 mismatch.
+
+Preserve all existing audit records and existing verification behavior.
+
+You may continue implementing and testing future audit writes, audit concurrency protections, and new-event integrity without attempting to repair historical records.
+
+Record this deferred issue in the project documentation as:
+
+"Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged."
+
+# 5. IMPLEMENTATION PHASES
+
+Complete the following phases in order.
+
+## PHASE 0 — Repository inspection and planning
+
+First:
+
+1. Inspect the repository structure.
+2. Read the implementation status document.
+3. Inspect the actual implementation of every integration.
+4. Check Git status and existing uncommitted changes.
+5. Identify the active branch.
+6. Identify missing dependencies and environment requirements.
+7. Identify incomplete functions, placeholder implementations, mocked integrations, and TODOs.
+8. Identify existing tests and their coverage.
+
+Do not overwrite existing work.
+
+Create or update:
+
+- IMPLEMENTATION_STATUS.md
+- ARCHITECTURE_REVIEW.md
+- COMPLETION_ROADMAP.md
+
+These documents must reflect actual code, not assumptions.
+
+Proceed with implementation after completing the inspection. Do not stop after merely producing a report.
+
+## PHASE 1 — Application stability
+
+Ensure the existing application starts reliably.
+
+Verify:
+
+- PostgreSQL starts and becomes healthy.
+- Backend connects to PostgreSQL.
+- HAPI FHIR starts and exposes R4 metadata.
+- Backend health checks accurately report dependency readiness.
+- Frontend connects to the backend through the correct IPv4 API address.
+- CORS configuration is correct.
+- Login works from the browser.
+- All existing role workspaces load.
+- API timeout and error handling work.
+- Docker Compose profiles and service dependencies are correct.
+
+The current development setup has a separate Vite process. Document how to start it.
+
+Do not change working Docker networking configuration without identifying a concrete problem.
+
+## PHASE 2 — Database and migration completion
+
+Verify all existing Alembic migrations.
+
+Pay particular attention to the latest organization-consent migration:
+
+`71b6c4a2d9e1`
+
+Tasks:
+
+1. Inspect the migration and corresponding models.
+2. Check migration ordering and dependencies.
+3. Test migration on a fresh SQLite database.
+4. Test migration against a backed-up PostgreSQL database.
+5. Verify organization and practitioner membership persistence.
+6. Verify consent persistence and expiration.
+7. Verify existing records remain compatible.
+8. Verify application startup does not silently create production tables.
+9. Verify rollback behavior where safe and supported.
+
+Never delete or reset the existing PostgreSQL database.
+
+Before applying migrations to existing data, require a verified backup.
+
+## PHASE 3 — Complete live Keycloak authentication
+
+Use the existing Keycloak realm and client configuration.
+
+Complete and verify:
+
+1. Realm import.
+2. Browser login using Authorization Code + PKCE.
+3. JWT signature validation.
+4. Issuer validation.
+5. Audience validation.
+6. Expiration validation.
+7. Subject validation.
+8. Application-role mapping.
+9. Patient registration and verified-email provisioning.
+10. Administrator-provisioned staff accounts.
+11. User-to-application-profile linking.
+12. Token refresh.
+13. Logout.
+14. Expired-token behavior.
+15. Unauthorized-role rejection.
+16. Disabled-user behavior.
+
+Verify that frontend and backend authentication modes are consistent.
+
+Do not bypass token validation to make login succeed.
+
+Do not introduce default production credentials or hardcoded secrets.
+
+## PHASE 4 — Complete HAPI FHIR R4 interoperability
+
+HAPI FHIR 7.4.0 is already configured for R4 and has successfully started against PostgreSQL.
+
+Now prove real interoperability.
+
+Inspect the existing FHIR adapter and application service layer.
+
+Verify the implemented resources, including:
 
 - Patient
 - Practitioner
@@ -118,1108 +264,423 @@ Implement and validate these FHIR resources:
 - Observation
 - DiagnosticReport
 - Consent
+- DocumentReference
 
-Ensure correct references between resources.
+For each supported resource:
 
-Examples:
-- A ServiceRequest references the patient, requesting practitioner and performing organization.
-- A Specimen is associated with the relevant laboratory request.
-- Observations reference the patient and appropriate specimen or request.
-- DiagnosticReport references the relevant ServiceRequest and Observation resources.
-- Consent references the patient and authorized practitioner.
+1. Create a synthetic resource.
+2. Validate it using HAPI `$validate` where supported.
+3. Persist it through the actual HAPI server.
+4. Retrieve it from HAPI.
+5. Update it using version-aware operations.
+6. Verify references.
+7. Verify application-level authorization.
+8. Verify error handling for invalid resources.
+9. Verify persistence after service restart.
 
-Use HAPI FHIR for resource validation, persistence and retrieval.
+Do not simulate HAPI responses in tests presented as live integration tests.
 
-Provide:
-- FHIR resource creation.
-- FHIR resource retrieval.
-- FHIR resource updates with version handling.
-- Reference validation.
-- Resource-level authorization.
-- FHIR API integration tests.
+Use authoritative HAPI reads wherever the architecture requires them.
 
-Do not simply create arbitrary JSON objects and call them FHIR resources.
+Verify that the API does not falsely report success when HAPI is unavailable.
 
-# 5. ORDERED LABORATORY WORKFLOW
+## PHASE 5 — Complete patient consent and authorization
 
-This must be a real workflow engine, not unrelated CRUD forms.
+This is a core project feature.
 
-Implement this complete process:
+Verify all existing consent scenarios against live PostgreSQL and HAPI.
 
-### Stage 1 — Patient
-The patient has a healthcare identity and can grant a physician limited access to selected medical information.
+Patient consent must support:
 
-### Stage 2 — Physician
-The physician:
-- Views records authorized by the patient.
-- Creates a laboratory test request.
-- Generates a FHIR ServiceRequest.
-- Assigns the request to a laboratory.
-- Tracks request status.
-- Reviews finalized reports.
+- A specific physician.
+- An organization and named physician.
+- Resource-specific permissions.
+- Defined validity of 1–30 days.
+- Automatic server-side expiry.
+- Immediate revocation.
+- Treatment-only purpose for organization grants.
+- Active organization membership.
+- Patient access history.
 
-### Stage 3 — Laboratory
-The laboratory:
-- Receives laboratory requests.
-- Verifies the request.
-- Accepts or rejects requests.
-- Assigns accepted requests to authorized technicians.
-- Tracks specimen processing.
+Verify authorization at the backend for:
 
-### Stage 4 — Laboratory technician
-The technician:
-- Views only assigned laboratory work.
-- Accepts assigned work.
-- Registers specimens.
-- Updates processing status.
-- Submits observations and test results.
-- Hands the completed work to an authorized laboratory reviewer.
+- Patient resource reads.
+- Clinical file downloads.
+- DocumentReference access.
+- ServiceRequest creation.
+- Observation and DiagnosticReport access where implemented.
+- Physician access.
+- Organization-based access.
+- Laboratory workflows.
 
-### Stage 5 — Laboratory reviewer
-The authorized reviewer:
-- Reviews submitted results.
-- Validates the report.
-- Finalizes the DiagnosticReport.
-- Records the finalization event.
+Test the following denial scenarios:
 
-### Stage 6 — Physician
-The physician:
-- Receives the finalized report.
-- Passes the consent authorization check.
-- Reviews observations and diagnostic results.
-- Records clinical review.
-
-### Stage 7 — Patient
-The patient:
-- Views authorized reports.
-- Reviews access history.
-- Controls future sharing through consent.
-
-Implement explicit workflow states and valid state transitions.
-
-Example:
-
-REQUESTED → ACCEPTED → ASSIGNED → SPECIMEN_REGISTERED → PROCESSING → RESULTS_SUBMITTED → REVIEWED → FINALIZED → PHYSICIAN_REVIEWED
-
-Reject invalid transitions.
-
-Enforce actor identity, role, organization membership and assignment at every transition.
-
-A technician must not be able to process an unassigned request or finalize a report without appropriate authorization.
-
-# 6. HYPERLEDGER FABRIC — REAL BLOCKCHAIN IMPLEMENTATION
-
-Hyperledger Fabric is mandatory.
-
-Build a genuine permissioned network suitable for a research prototype.
-
-Include:
-- Provider organization.
-- Laboratory organization.
-- Fabric peers.
-- Membership Service Provider identities.
-- Ordering service.
-- Channels.
-- Endorsement policies.
-- Go chaincode.
-- Fabric Gateway integration.
-
-Design chaincode for selected events:
-
-1. ConsentGranted
-2. ConsentRevoked
-3. ConsentExpired
-4. LaboratoryRequestAccepted
-5. TechnicianAssigned
-6. SpecimenRegistered
-7. DiagnosticReportFinalized
-8. ClinicalRecordIntegrityUpdated
-9. AuthorizedRecordAccess
-
-Each event must contain carefully selected metadata, pseudonymous references and cryptographic integrity evidence.
-
-Do not store identifiable clinical records on-chain.
-
-Keep the following off-chain:
-- Patient names.
-- Contact information.
-- Medical history.
-- Diagnostic reports.
-- Laboratory observations.
-- Prescriptions.
-- Clinical documents.
-
-Implement:
-- Transaction submission.
-- Endorsement.
-- Commit confirmation.
-- Transaction ID tracking.
-- Ledger event retrieval.
-- Integrity verification.
-- Provenance history.
-
-Use a transactional outbox pattern between PostgreSQL and Fabric.
-
-Do not claim an event has been recorded on-chain until Fabric confirms successful commit.
-
-The application must distinguish pending, committed and failed ledger events.
-
-Blockchain should complement the consent engine, not replace access-control enforcement.
-
-# 7. KEYCLOAK AND SECURITY
-
-Configure Keycloak with:
-- WiraChain realm.
-- React frontend client.
-- FastAPI backend audience.
-- OAuth 2.0 / OIDC.
-- Authorization Code Flow with PKCE.
-- JWT signature verification.
-- Role mapping.
-- Token expiry handling.
-- Refresh-token handling where appropriate.
-
-Required roles:
-
-PATIENT
-PHYSICIAN
-LAB_TECHNICIAN
-LAB_SUPERVISOR
-ADMIN
-
-Implement backend security checks for:
-- Authentication.
-- Role-based authorization.
-- Organization membership.
-- Resource ownership.
-- Laboratory assignment.
-- Patient consent.
-- Token validity.
-- Resource-level access.
-
-Also implement:
-- Secure password and identity management through Keycloak.
-- Input validation.
-- SQL injection prevention.
-- Rate limiting for sensitive endpoints.
-- Secure CORS configuration.
-- Safe error responses.
-- Secrets through environment variables.
-- Audit logging.
-- Secure document access.
-
-Never hardcode production credentials or secrets.
-
-# 8. DATABASE DESIGN
-
-Design a normalized PostgreSQL schema for application-level data.
-
-Include entities for:
-- User profiles.
-- Organizations.
-- Patients.
-- Practitioners.
-- Laboratories.
-- Technicians.
-- Consent records.
-- Consent scopes.
-- Laboratory requests.
-- Technician assignments.
-- Specimens.
-- Workflow transitions.
-- Clinical resource references.
-- Audit events.
-- Blockchain transaction references.
-- Transactional outbox events.
-
-Use appropriate:
-- Primary keys.
-- Foreign keys.
-- Constraints.
-- Indexes.
-- Timestamps.
-- Database migrations.
-- Transaction management.
-
-HAPI FHIR should manage its own FHIR persistence. Avoid creating competing duplicate clinical databases without a clear reason.
-
-# 9. COMPLETE FRONTEND
-
-Build a polished, modern, professional healthcare interoperability application.
-
-The interface must reflect the seriousness of a secure clinical information exchange platform.
-
-Do not create a generic template dashboard.
-
-Create separate experiences for each role.
-
-### Patient portal
-- Patient profile.
-- Healthcare record overview.
-- Consent management.
-- Grant access screen.
-- Resource-level permission selection.
-- Access duration selector.
-- Active consent list.
-- Revocation controls.
-- Consent history.
-- Record access history.
-- Blockchain provenance verification view.
-
-### Physician portal
-- Physician profile.
-- Authorized patient list.
-- Patient record viewer.
-- Consent status indicators.
-- Laboratory request creation.
-- ServiceRequest tracking.
-- Laboratory result viewer.
-- DiagnosticReport viewer.
-- Clinical review history.
-
-### Laboratory portal
-- Incoming requests.
-- Request acceptance/rejection.
-- Technician assignment.
-- Workload overview.
-- Specimen tracking.
-- Processing status.
-- Report validation.
-- Finalization workflow.
-
-### Technician portal
-- Assigned work queue.
-- Specimen registration.
-- Processing updates.
-- Observation entry.
-- Submission to laboratory reviewer.
-- Assignment and workflow history.
-
-### Administrator portal
-- User and organization management.
-- Role assignment.
-- System activity.
-- Security events.
-- Workflow monitoring.
-- Blockchain transaction monitoring.
-
-Every screen must connect to actual backend functionality.
-
-Implement:
-- Loading states.
-- Error states.
-- Form validation.
-- Empty states.
-- Confirmation dialogs.
-- Responsive layouts.
-- Accessible components.
-- Clear navigation.
-- Useful notifications.
-
-Avoid decorative buttons that do nothing.
-
-# 10. AUDIT AND PROVENANCE
-
-Implement a complete audit strategy.
-
-Record:
-- Authentication-related security events.
-- Consent creation.
-- Consent modification.
-- Consent revocation.
-- Access granted or denied.
-- Laboratory request creation.
-- Technician assignment.
-- Specimen processing.
-- Observation submission.
-- Diagnostic report finalization.
-- Clinical review.
-- Blockchain transaction submission and confirmation.
-
-Audit entries should identify the actor, action, timestamp, relevant resource reference, outcome and correlation ID.
-
-Do not put sensitive patient information into application logs or blockchain events unnecessarily.
-
-Provide a patient-accessible view of relevant record-sharing history.
-
-# 11. TESTING AND RESEARCH EVALUATION
-
-Build a reproducible evaluation suite.
-
-### Functional testing
-Test every role and major workflow.
-
-### Consent testing
-Test:
-- No consent.
-- Valid consent.
 - Expired consent.
 - Revoked consent.
-- Resource outside authorized scope.
-- Unauthorized physician.
-- Consent duration greater than 30 days.
-- Attempts to bypass authorization through direct API calls.
+- Removed organization membership.
+- Wrong physician.
+- Wrong patient.
+- Wrong resource type.
+- Wrong purpose.
+- Unauthorized role.
+- Unassigned technician.
+- Unowned laboratory request.
 
-### Laboratory workflow testing
-Test:
-- Invalid state transitions.
-- Unassigned technician access.
-- Unauthorized report finalization.
-- Duplicate request submissions.
-- Invalid specimen references.
+Do not rely on frontend restrictions alone.
 
-### Security testing
-Test:
-- Invalid and expired JWTs.
-- Role escalation attempts.
-- Unauthorized resource access.
-- SQL injection attempts.
+Verify that a revoked consent immediately blocks subsequent requests.
+
+Ensure organization consent never unintentionally grants access to every organization member.
+
+## PHASE 6 — Complete Hyperledger Fabric integration
+
+Inspect the existing Go chaincode, Gateway adapter, and transactional outbox.
+
+Do not replace the current implementation.
+
+Complete the actual deployment and integration.
+
+Tasks:
+
+1. Verify both Go modules.
+2. Build the adapter image.
+3. Start the existing two-organization Fabric test network.
+4. Configure peer endorsement according to the existing deployment guidance.
+5. Deploy the chaincode.
+6. Configure Gateway connectivity.
+7. Verify identity and certificate handling.
+8. Submit a synthetic audit/provenance event from the backend.
+9. Verify the event is committed on the ledger.
+10. Capture and verify its transaction ID.
+11. Verify outbox retry behavior.
+12. Verify duplicate submission handling.
+13. Verify rejected event types.
+14. Verify failure recovery after Gateway unavailability.
+15. Verify commit status is only recorded after confirmed ledger commitment.
+
+Only approved metadata, pseudonymous references, and permitted hashes should be submitted.
+
+Never submit patient names, clinical documents, medical records, or unnecessary personal information to Fabric.
+
+Do not mark a transaction committed merely because the Gateway accepted an HTTP request.
+
+## PHASE 7 — Complete laboratory workflow
+
+Verify the complete workflow:
+
+REQUESTED
+→ ACCEPTED
+→ ASSIGNED
+→ SPECIMEN_REGISTERED
+→ PROCESSING
+→ RESULTS_SUBMITTED
+→ FINALIZED
+→ PHYSICIAN_REVIEWED
+
+Verify:
+
+- Physician creates a ServiceRequest.
+- Correct laboratory receives the request.
+- Laboratory supervisor accepts it.
+- Supervisor assigns a technician.
+- Technician registers the specimen.
+- Technician submits observations and results.
+- Laboratory finalizes the report.
+- Physician reviews the result.
+
+Enforce ownership, membership, assignment, authorization, and transition ordering.
+
+Verify the appropriate FHIR resources are persisted in HAPI.
+
+Prevent invalid transitions and duplicate requests.
+
+Use synthetic clinical data.
+
+## PHASE 8 — Clinical file security
+
+Review file upload and download functionality.
+
+Existing restrictions include:
+
+- PDF
+- JPEG
+- PNG
+- TXT
+- CSV
+- Maximum 10 MiB
+
+Verify:
+
+1. Server-side file validation.
+2. MIME-type validation.
+3. Safe filename handling.
+4. Path traversal protection.
+5. File size enforcement.
+6. Authenticated downloads.
+7. Patient ownership checks.
+8. Physician Document consent checks.
+9. Laboratory assignment restrictions.
+10. DocumentReference creation and persistence.
+11. File hashing.
+12. Storage persistence after container restart.
+
+Add malware scanning only if a practical, maintainable integration can be implemented in the existing environment.
+
+Do not store clinical files on the blockchain.
+
+## PHASE 9 — Security verification
+
+Complete a security review of the existing application.
+
+Review:
+
+- Authentication and session management.
+- Authorization and privilege escalation.
+- IDOR.
+- SQL injection.
+- XSS.
+- CSRF where applicable.
+- CORS.
+- File upload vulnerabilities.
+- JWT validation.
+- Secret management.
 - Rate limiting.
-- Broken object-level authorization.
-- Consent bypass attempts.
+- Error disclosure.
+- Logging of sensitive information.
+- Organization membership authorization.
+- Consent enforcement.
 
-Use safe, controlled tests against the local development environment.
+Run the existing OWASP ZAP passive baseline against the local application.
 
-### FHIR testing
-Validate required resources and references using HAPI FHIR.
+Use the existing loopback-only safety restrictions.
 
-### Blockchain testing
+Do not target external systems.
+
+Produce:
+
+`SECURITY_ASSESSMENT.md`
+
+Include findings, severity, evidence, remediation, and unresolved risks.
+
+Do not claim that a vulnerability is fixed without testing it.
+
+## PHASE 10 — Performance and reliability
+
+Run the existing k6 load-test suite against the actual local application.
+
 Measure:
-- Transaction submission latency.
-- Commit latency.
-- Transaction throughput.
-- Ledger integrity verification.
-- Blockchain integration overhead.
 
-### Performance testing
-Use k6 or JMeter.
-
-Evaluate increasing concurrency and report:
-- Requests per second.
-- Average latency.
-- p95 latency.
-- Error rate.
-- Resource utilization.
-
-Compare an off-chain baseline with blockchain-enabled event processing.
-
-Never invent test results. Generate reports from actual test executions.
-
-# 12. DEVELOPMENT AND DELIVERY RULES
-
-These instructions are mandatory.
-
-1. First inspect the existing ZIP and the abstract thoroughly.
-2. Produce a requirement-to-implementation mapping.
-3. Establish the new architecture.
-4. Create the repository structure.
-5. Implement the backend and database.
-6. Integrate Keycloak.
-7. Integrate HAPI FHIR.
-8. Implement the consent engine.
-9. Implement the laboratory workflow.
-10. Integrate Hyperledger Fabric.
-11. Build the complete frontend.
-12. Integrate all components.
-13. Run automated tests.
-14. Fix implementation errors.
-15. Prepare deployment documentation.
-16. Prepare research evaluation documentation.
-
-Do not stop after creating the architecture.
-
-Do not stop after implementing authentication.
-
-Do not stop after implementing a basic dashboard.
-
-Do not replace actual functionality with mock responses.
-
-Do not use fake blockchain transactions.
-
-Do not claim unimplemented features are complete.
-
-Do not leave critical TODOs while declaring the project finished.
-
-Use synthetic healthcare data for development and testing.
-
-Use environment configuration rather than hardcoded secrets.
-
-Keep the application modular, maintainable and documented.
-
-Because the development machine may have limited RAM, provide lightweight development profiles and allow infrastructure components to be started independently. Do not assume all services can run simultaneously on a low-resource laptop.
-
-# 13. REQUIRED FINAL DELIVERABLES
-
-Deliver:
-
-1. Complete frontend source code.
-2. Complete FastAPI backend.
-3. PostgreSQL schema and migrations.
-4. Keycloak realm and client configuration.
-5. HAPI FHIR integration.
-6. Consent management engine.
-7. Laboratory workflow engine.
-8. Hyperledger Fabric network configuration.
-9. Go chaincode.
-10. Fabric integration service.
-11. Docker Compose configurations.
-12. Synthetic test data and seed scripts.
-13. Automated test suites.
-14. API documentation.
-15. Architecture diagrams.
-16. Deployment and setup guide for Linux.
-17. Security testing report.
-18. Performance evaluation report generated from real executions.
-19. Research implementation mapping against my original abstract.
-20. Complete README with exact setup, startup, test and troubleshooting commands.
-
-# 14. ACCEPTANCE CRITERIA
-
-The project is not complete unless all these scenarios work:
-
-- A patient can grant a specific physician access to selected records for a limited period.
-- The system rejects consent durations exceeding 30 days.
-- The physician can access only authorized resources.
-- Consent expiration blocks subsequent access.
-- Early revocation blocks subsequent access.
-- A physician can create a FHIR laboratory request.
-- A laboratory can accept and assign that request.
-- An authorized technician can register specimens and submit observations.
-- An authorized reviewer can finalize the diagnostic report.
-- The physician can retrieve the report after passing authorization checks.
-- The patient can review relevant sharing history.
-- Selected consent, workflow and integrity events are committed to Hyperledger Fabric.
-- Blockchain transactions can be independently verified.
-- Clinical data remain off-chain.
-- Automated tests demonstrate the expected authorization and workflow behaviour.
-- The complete frontend communicates with the actual backend and infrastructure.
-
-# 15. HOW TO WORK WITH ME
-
-I am a CSE engineering student developing this as a final-year research project.
-
-I need working software, not just explanations.
-
-Work systematically. Maintain a clear record of implemented components, remaining components, test results and known limitations.
-
-If you have access to my project files and terminal environment, inspect, modify, execute and test them directly.
-
-If you are operating in a chat-only environment, create complete files and provide exact paths and commands. Do not pretend to have executed code you have not run.
-
-When an architectural decision is necessary, use the most defensible engineering choice consistent with my abstract. Ask me only when a genuinely essential decision cannot be resolved responsibly.
-
-Prioritize correctness, security, interoperability and research validity over superficial UI polish.
-
-**FINAL INSTRUCTION: Build WiraChain as the actual secure, consent-aware FHIR and permissioned-blockchain healthcare data exchange framework described in my abstract. Do not downgrade it into a basic hospital management application.**# MASTER DEVELOPMENT PROMPT — WIRACHAIN
-
-## Project Title
-**A SECURE, CONSENT-AWARE FHIR AND PERMISSIONED BLOCKCHAIN FRAMEWORK FOR INTEROPERABLE HEALTHCARE DATA EXCHANGE AMONG PATIENTS, PHYSICIANS AND CLINICAL LABORATORIES**
-
-Act as a senior software architect, healthcare interoperability engineer, cybersecurity engineer, blockchain developer, database architect and full-stack development lead.
-
-Your responsibility is to DESIGN, IMPLEMENT, TEST AND DELIVER a complete, functional, integrated full-stack research prototype called **WiraChain**, strictly aligned with the attached project abstract.
-
-This is not a generic hospital management system, patient CRUD application, appointment booking platform or simple role-based dashboard.
-
-I want the actual research concept implemented end to end.
-
-I am providing:
-1. My original project abstract, which is the authoritative statement of requirements.
-2. My existing project ZIP, which contains an earlier implementation. Treat it as legacy reference material. Inspect it, reuse genuinely useful components where appropriate, but do not allow its limitations to determine the new architecture.
-
-Do not merely generate a project plan, architecture document, UI mockup or isolated code snippets. Build the complete application.
-
----
-
-# 1. CORE RESEARCH OBJECTIVE
-
-Build a secure, consent-aware healthcare information exchange framework that connects:
-
-- Patients
-- Physicians
-- Clinical laboratories
-- Laboratory technicians
-- Administrators
-
-The system must provide interoperable healthcare information exchange using HL7 FHIR resources, enforce fine-grained patient-controlled consent, implement secure laboratory workflows, and use Hyperledger Fabric as a genuine permissioned blockchain for selected audit, consent and integrity events.
-
-Clinical data must remain off-chain in secure storage. Blockchain must provide tamper-evident provenance, not act as the clinical database.
-
-# 2. MANDATORY TECHNOLOGY STACK
-
-Use the following technologies:
-
-| Layer | Technology |
-|---|---|
-| Frontend | React.js |
-| Backend | Python FastAPI |
-| Identity management | Keycloak |
-| Authentication | OAuth 2.0 / OpenID Connect |
-| Healthcare interoperability | HL7 FHIR R4 |
-| FHIR server | HAPI FHIR |
-| Application database | PostgreSQL |
-| Blockchain | Hyperledger Fabric |
-| Chaincode | Go |
-| Frontend styling | Modern responsive CSS / Tailwind CSS |
-| API documentation | OpenAPI / Swagger |
-| Performance testing | k6 or Apache JMeter |
-| Security testing | OWASP ZAP |
-| API testing | Postman / automated tests |
-| Containerization | Docker and Docker Compose |
-
-Do not replace mandatory components with simulated equivalents.
-
-In particular:
-- A hash-chained PostgreSQL table is not Hyperledger Fabric.
-- FHIR-shaped JSON is not sufficient evidence of HAPI FHIR interoperability.
-- JWT authentication alone is not Keycloak integration.
-- A mock blockchain service is not an implemented permissioned blockchain.
-
-If an infrastructure component cannot run in the development environment, still implement its genuine integration, provide reproducible deployment configuration and clearly document the limitation. Never falsely claim it is operational.
-
-Use FHIR R4 consistently throughout the implementation.
-
-# 3. PATIENT-CONTROLLED CONSENT MANAGEMENT
-
-This is one of the most important parts of WiraChain.
-
-Implement a dedicated consent management engine.
-
-Patients must be able to:
-
-1. View their healthcare information.
-2. Select a specific physician.
-3. Select the categories or specific resources the physician may access.
-4. Grant permission for a defined period.
-5. Set a maximum access duration of 30 days.
-6. View active permissions.
-7. Revoke permission before its expiration.
-8. Review expired and revoked permissions.
-9. View who accessed their records, when and for what purpose.
-
-The backend must enforce these permissions.
-
-Required rules:
-
-- Default-deny authorization.
-- Consent must be specific to the patient and authorized physician.
-- Consent must include permitted resource scope.
-- Consent must include validity start and end times.
-- The server must enforce the 30-day maximum.
-- Expired consent must automatically become ineffective.
-- Early revocation must immediately prevent subsequent access.
-- The frontend must never be trusted to enforce authorization.
-- Cached authorization must not bypass revocation.
-- Every relevant consent action must generate an auditable event.
-
-Implement the FHIR R4 Consent resource and map its lifecycle correctly to the application's consent states.
-
-Do not confuse authentication, RBAC, resource assignment and patient consent. They are separate authorization requirements.
-
-# 4. FHIR INTEROPERABILITY
-
-Integrate a real HAPI FHIR R4 server.
-
-Implement and validate these FHIR resources:
-
-- Patient
-- Practitioner
-- Organization
-- ServiceRequest
-- Specimen
-- Observation
-- DiagnosticReport
-- Consent
-
-Ensure correct references between resources.
-
-Examples:
-- A ServiceRequest references the patient, requesting practitioner and performing organization.
-- A Specimen is associated with the relevant laboratory request.
-- Observations reference the patient and appropriate specimen or request.
-- DiagnosticReport references the relevant ServiceRequest and Observation resources.
-- Consent references the patient and authorized practitioner.
-
-Use HAPI FHIR for resource validation, persistence and retrieval.
-
-Provide:
-- FHIR resource creation.
-- FHIR resource retrieval.
-- FHIR resource updates with version handling.
-- Reference validation.
-- Resource-level authorization.
-- FHIR API integration tests.
-
-Do not simply create arbitrary JSON objects and call them FHIR resources.
-
-# 5. ORDERED LABORATORY WORKFLOW
-
-This must be a real workflow engine, not unrelated CRUD forms.
-
-Implement this complete process:
-
-### Stage 1 — Patient
-The patient has a healthcare identity and can grant a physician limited access to selected medical information.
-
-### Stage 2 — Physician
-The physician:
-- Views records authorized by the patient.
-- Creates a laboratory test request.
-- Generates a FHIR ServiceRequest.
-- Assigns the request to a laboratory.
-- Tracks request status.
-- Reviews finalized reports.
-
-### Stage 3 — Laboratory
-The laboratory:
-- Receives laboratory requests.
-- Verifies the request.
-- Accepts or rejects requests.
-- Assigns accepted requests to authorized technicians.
-- Tracks specimen processing.
-
-### Stage 4 — Laboratory technician
-The technician:
-- Views only assigned laboratory work.
-- Accepts assigned work.
-- Registers specimens.
-- Updates processing status.
-- Submits observations and test results.
-- Hands the completed work to an authorized laboratory reviewer.
-
-### Stage 5 — Laboratory reviewer
-The authorized reviewer:
-- Reviews submitted results.
-- Validates the report.
-- Finalizes the DiagnosticReport.
-- Records the finalization event.
-
-### Stage 6 — Physician
-The physician:
-- Receives the finalized report.
-- Passes the consent authorization check.
-- Reviews observations and diagnostic results.
-- Records clinical review.
-
-### Stage 7 — Patient
-The patient:
-- Views authorized reports.
-- Reviews access history.
-- Controls future sharing through consent.
-
-Implement explicit workflow states and valid state transitions.
-
-Example:
-
-REQUESTED → ACCEPTED → ASSIGNED → SPECIMEN_REGISTERED → PROCESSING → RESULTS_SUBMITTED → REVIEWED → FINALIZED → PHYSICIAN_REVIEWED
-
-Reject invalid transitions.
-
-Enforce actor identity, role, organization membership and assignment at every transition.
-
-A technician must not be able to process an unassigned request or finalize a report without appropriate authorization.
-
-# 6. HYPERLEDGER FABRIC — REAL BLOCKCHAIN IMPLEMENTATION
-
-Hyperledger Fabric is mandatory.
-
-Build a genuine permissioned network suitable for a research prototype.
-
-Include:
-- Provider organization.
-- Laboratory organization.
-- Fabric peers.
-- Membership Service Provider identities.
-- Ordering service.
-- Channels.
-- Endorsement policies.
-- Go chaincode.
-- Fabric Gateway integration.
-
-Design chaincode for selected events:
-
-1. ConsentGranted
-2. ConsentRevoked
-3. ConsentExpired
-4. LaboratoryRequestAccepted
-5. TechnicianAssigned
-6. SpecimenRegistered
-7. DiagnosticReportFinalized
-8. ClinicalRecordIntegrityUpdated
-9. AuthorizedRecordAccess
-
-Each event must contain carefully selected metadata, pseudonymous references and cryptographic integrity evidence.
-
-Do not store identifiable clinical records on-chain.
-
-Keep the following off-chain:
-- Patient names.
-- Contact information.
-- Medical history.
-- Diagnostic reports.
-- Laboratory observations.
-- Prescriptions.
-- Clinical documents.
-
-Implement:
-- Transaction submission.
-- Endorsement.
-- Commit confirmation.
-- Transaction ID tracking.
-- Ledger event retrieval.
-- Integrity verification.
-- Provenance history.
-
-Use a transactional outbox pattern between PostgreSQL and Fabric.
-
-Do not claim an event has been recorded on-chain until Fabric confirms successful commit.
-
-The application must distinguish pending, committed and failed ledger events.
-
-Blockchain should complement the consent engine, not replace access-control enforcement.
-
-# 7. KEYCLOAK AND SECURITY
-
-Configure Keycloak with:
-- WiraChain realm.
-- React frontend client.
-- FastAPI backend audience.
-- OAuth 2.0 / OIDC.
-- Authorization Code Flow with PKCE.
-- JWT signature verification.
-- Role mapping.
-- Token expiry handling.
-- Refresh-token handling where appropriate.
-
-Required roles:
-
-PATIENT
-PHYSICIAN
-LAB_TECHNICIAN
-LAB_SUPERVISOR
-ADMIN
-
-Implement backend security checks for:
+- Health endpoint response.
 - Authentication.
-- Role-based authorization.
-- Organization membership.
-- Resource ownership.
-- Laboratory assignment.
-- Patient consent.
-- Token validity.
-- Resource-level access.
+- Authenticated profile requests.
+- Patient resource reads.
+- File listing.
+- Consent checks.
+- ServiceRequest listing.
 
-Also implement:
-- Secure password and identity management through Keycloak.
-- Input validation.
-- SQL injection prevention.
-- Rate limiting for sensitive endpoints.
-- Secure CORS configuration.
-- Safe error responses.
-- Secrets through environment variables.
-- Audit logging.
-- Secure document access.
+Use synthetic accounts and data.
 
-Never hardcode production credentials or secrets.
+Capture:
 
-# 8. DATABASE DESIGN
-
-Design a normalized PostgreSQL schema for application-level data.
-
-Include entities for:
-- User profiles.
-- Organizations.
-- Patients.
-- Practitioners.
-- Laboratories.
-- Technicians.
-- Consent records.
-- Consent scopes.
-- Laboratory requests.
-- Technician assignments.
-- Specimens.
-- Workflow transitions.
-- Clinical resource references.
-- Audit events.
-- Blockchain transaction references.
-- Transactional outbox events.
-
-Use appropriate:
-- Primary keys.
-- Foreign keys.
-- Constraints.
-- Indexes.
-- Timestamps.
-- Database migrations.
-- Transaction management.
-
-HAPI FHIR should manage its own FHIR persistence. Avoid creating competing duplicate clinical databases without a clear reason.
-
-# 9. COMPLETE FRONTEND
-
-Build a polished, modern, professional healthcare interoperability application.
-
-The interface must reflect the seriousness of a secure clinical information exchange platform.
-
-Do not create a generic template dashboard.
-
-Create separate experiences for each role.
-
-### Patient portal
-- Patient profile.
-- Healthcare record overview.
-- Consent management.
-- Grant access screen.
-- Resource-level permission selection.
-- Access duration selector.
-- Active consent list.
-- Revocation controls.
-- Consent history.
-- Record access history.
-- Blockchain provenance verification view.
-
-### Physician portal
-- Physician profile.
-- Authorized patient list.
-- Patient record viewer.
-- Consent status indicators.
-- Laboratory request creation.
-- ServiceRequest tracking.
-- Laboratory result viewer.
-- DiagnosticReport viewer.
-- Clinical review history.
-
-### Laboratory portal
-- Incoming requests.
-- Request acceptance/rejection.
-- Technician assignment.
-- Workload overview.
-- Specimen tracking.
-- Processing status.
-- Report validation.
-- Finalization workflow.
-
-### Technician portal
-- Assigned work queue.
-- Specimen registration.
-- Processing updates.
-- Observation entry.
-- Submission to laboratory reviewer.
-- Assignment and workflow history.
-
-### Administrator portal
-- User and organization management.
-- Role assignment.
-- System activity.
-- Security events.
-- Workflow monitoring.
-- Blockchain transaction monitoring.
-
-Every screen must connect to actual backend functionality.
-
-Implement:
-- Loading states.
-- Error states.
-- Form validation.
-- Empty states.
-- Confirmation dialogs.
-- Responsive layouts.
-- Accessible components.
-- Clear navigation.
-- Useful notifications.
-
-Avoid decorative buttons that do nothing.
-
-# 10. AUDIT AND PROVENANCE
-
-Implement a complete audit strategy.
-
-Record:
-- Authentication-related security events.
-- Consent creation.
-- Consent modification.
-- Consent revocation.
-- Access granted or denied.
-- Laboratory request creation.
-- Technician assignment.
-- Specimen processing.
-- Observation submission.
-- Diagnostic report finalization.
-- Clinical review.
-- Blockchain transaction submission and confirmation.
-
-Audit entries should identify the actor, action, timestamp, relevant resource reference, outcome and correlation ID.
-
-Do not put sensitive patient information into application logs or blockchain events unnecessarily.
-
-Provide a patient-accessible view of relevant record-sharing history.
-
-# 11. TESTING AND RESEARCH EVALUATION
-
-Build a reproducible evaluation suite.
-
-### Functional testing
-Test every role and major workflow.
-
-### Consent testing
-Test:
-- No consent.
-- Valid consent.
-- Expired consent.
-- Revoked consent.
-- Resource outside authorized scope.
-- Unauthorized physician.
-- Consent duration greater than 30 days.
-- Attempts to bypass authorization through direct API calls.
-
-### Laboratory workflow testing
-Test:
-- Invalid state transitions.
-- Unassigned technician access.
-- Unauthorized report finalization.
-- Duplicate request submissions.
-- Invalid specimen references.
-
-### Security testing
-Test:
-- Invalid and expired JWTs.
-- Role escalation attempts.
-- Unauthorized resource access.
-- SQL injection attempts.
-- Rate limiting.
-- Broken object-level authorization.
-- Consent bypass attempts.
-
-Use safe, controlled tests against the local development environment.
-
-### FHIR testing
-Validate required resources and references using HAPI FHIR.
-
-### Blockchain testing
-Measure:
-- Transaction submission latency.
-- Commit latency.
-- Transaction throughput.
-- Ledger integrity verification.
-- Blockchain integration overhead.
-
-### Performance testing
-Use k6 or JMeter.
-
-Evaluate increasing concurrency and report:
-- Requests per second.
+- Request count.
+- Throughput.
 - Average latency.
 - p95 latency.
+- p99 latency where available.
 - Error rate.
-- Resource utilization.
+- Failed requests.
 
-Compare an off-chain baseline with blockchain-enabled event processing.
+Do not fabricate performance numbers.
 
-Never invent test results. Generate reports from actual test executions.
+Do not label a runner smoke test as a performance benchmark.
 
-# 12. DEVELOPMENT AND DELIVERY RULES
+Investigate bottlenecks only after obtaining actual results.
 
-These instructions are mandatory.
+Replace process-local login rate limiting with a shared store before claiming horizontal API scalability.
 
-1. First inspect the existing ZIP and the abstract thoroughly.
-2. Produce a requirement-to-implementation mapping.
-3. Establish the new architecture.
-4. Create the repository structure.
-5. Implement the backend and database.
-6. Integrate Keycloak.
-7. Integrate HAPI FHIR.
-8. Implement the consent engine.
-9. Implement the laboratory workflow.
-10. Integrate Hyperledger Fabric.
-11. Build the complete frontend.
-12. Integrate all components.
-13. Run automated tests.
-14. Fix implementation errors.
-15. Prepare deployment documentation.
-16. Prepare research evaluation documentation.
+## PHASE 11 — Backup and recovery
 
-Do not stop after creating the architecture.
+Create and verify a PostgreSQL backup and restore procedure.
 
-Do not stop after implementing authentication.
+Requirements:
 
-Do not stop after implementing a basic dashboard.
+1. Document backup commands.
+2. Preserve database ownership and permissions.
+3. Verify backup integrity.
+4. Restore into an isolated test database.
+5. Verify schema and essential records.
+6. Verify application connectivity after restoration.
+7. Document recovery steps.
+8. Document file-storage backup and restoration.
 
-Do not replace actual functionality with mock responses.
+Never test recovery by overwriting the live database.
 
-Do not use fake blockchain transactions.
+Do not remove Docker volumes.
 
-Do not claim unimplemented features are complete.
+## PHASE 12 — Frontend completion
 
-Do not leave critical TODOs while declaring the project finished.
+Inspect every role workspace.
 
-Use synthetic healthcare data for development and testing.
+Verify:
 
-Use environment configuration rather than hardcoded secrets.
+Patient:
+- Dashboard.
+- Clinical files.
+- Consent management.
+- Sharing with physicians and organizations.
+- Access history.
+- Revocation.
 
-Keep the application modular, maintainable and documented.
+Physician:
+- Patient access requests.
+- Consent-aware patient records.
+- Clinical document viewing.
+- ServiceRequest creation.
+- Laboratory results review.
 
-Because the development machine may have limited RAM, provide lightweight development profiles and allow infrastructure components to be started independently. Do not assume all services can run simultaneously on a low-resource laptop.
+Laboratory supervisor:
+- Incoming requests.
+- Acceptance.
+- Technician assignment.
+- Workflow monitoring.
 
-# 13. REQUIRED FINAL DELIVERABLES
+Laboratory technician:
+- Assigned requests.
+- Specimen registration.
+- Processing.
+- Result submission.
 
-Deliver:
+Administrator:
+- User provisioning.
+- Organization management.
+- Physician membership management.
+- Audit tools.
 
-1. Complete frontend source code.
-2. Complete FastAPI backend.
-3. PostgreSQL schema and migrations.
-4. Keycloak realm and client configuration.
-5. HAPI FHIR integration.
-6. Consent management engine.
-7. Laboratory workflow engine.
-8. Hyperledger Fabric network configuration.
-9. Go chaincode.
-10. Fabric integration service.
-11. Docker Compose configurations.
-12. Synthetic test data and seed scripts.
-13. Automated test suites.
-14. API documentation.
-15. Architecture diagrams.
-16. Deployment and setup guide for Linux.
-17. Security testing report.
-18. Performance evaluation report generated from real executions.
-19. Research implementation mapping against my original abstract.
-20. Complete README with exact setup, startup, test and troubleshooting commands.
+Improve loading states, error states, empty states, responsive layout, and form validation.
 
-# 14. ACCEPTANCE CRITERIA
+Preserve the existing visual identity and design direction.
 
-The project is not complete unless all these scenarios work:
+Do not redesign the entire application unnecessarily.
 
-- A patient can grant a specific physician access to selected records for a limited period.
-- The system rejects consent durations exceeding 30 days.
-- The physician can access only authorized resources.
-- Consent expiration blocks subsequent access.
-- Early revocation blocks subsequent access.
-- A physician can create a FHIR laboratory request.
-- A laboratory can accept and assign that request.
-- An authorized technician can register specimens and submit observations.
-- An authorized reviewer can finalize the diagnostic report.
-- The physician can retrieve the report after passing authorization checks.
-- The patient can review relevant sharing history.
-- Selected consent, workflow and integrity events are committed to Hyperledger Fabric.
-- Blockchain transactions can be independently verified.
-- Clinical data remain off-chain.
-- Automated tests demonstrate the expected authorization and workflow behaviour.
-- The complete frontend communicates with the actual backend and infrastructure.
+Run the production build and resolve actual errors.
 
-# 15. HOW TO WORK WITH ME
+# 6. ENGINEERING RULES
 
-I am a CSE engineering student developing this as a final-year research project.
+Follow these rules throughout the work:
 
-I need working software, not just explanations.
+1. Inspect before modifying.
+2. Preserve working code.
+3. Do not remove existing features.
+4. Do not invent successful integrations.
+5. Do not replace live integration tests with mocks and claim completion.
+6. Keep clinical data off-chain.
+7. Use synthetic data exclusively.
+8. Never hardcode secrets.
+9. Do not reset databases.
+10. Do not delete Docker volumes.
+11. Do not stop unknown processes.
+12. Do not disable authentication or authorization to bypass errors.
+13. Do not silently suppress failing tests.
+14. Do not claim production readiness prematurely.
+15. Keep code modular and maintainable.
+16. Add regression tests for every bug fixed.
+17. Keep documentation synchronized with actual implementation.
+18. Preserve historical audit records and defer the #33 investigation.
 
-Work systematically. Maintain a clear record of implemented components, remaining components, test results and known limitations.
+Before changing files:
 
-If you have access to my project files and terminal environment, inspect, modify, execute and test them directly.
+- Inspect `git status`.
+- Identify existing uncommitted changes.
+- Do not overwrite user modifications.
+- Create a checkpoint commit only with my approval.
 
-If you are operating in a chat-only environment, create complete files and provide exact paths and commands. Do not pretend to have executed code you have not run.
+For database changes, require a verified backup before applying them to existing PostgreSQL data.
 
-When an architectural decision is necessary, use the most defensible engineering choice consistent with my abstract. Ask me only when a genuinely essential decision cannot be resolved responsibly.
+# 7. EXECUTION STRATEGY
 
-Prioritize correctness, security, interoperability and research validity over superficial UI polish.
+Work in small, independently verifiable stages.
 
-**FINAL INSTRUCTION: Build WiraChain as the actual secure, consent-aware FHIR and permissioned-blockchain healthcare data exchange framework described in my abstract. Do not downgrade it into a basic hospital management application.**
+For every phase:
+
+1. Explain the identified gap.
+2. Identify the relevant files.
+3. Implement the necessary changes.
+4. Run focused tests.
+5. Run relevant regression tests.
+6. Run the integration test where applicable.
+7. Report actual command output and results.
+8. Update implementation documentation.
+9. Identify remaining limitations.
+
+Do not attempt to modify the entire project in one giant operation.
+
+If a service is unavailable, diagnose the actual cause. Do not silently substitute a mock.
+
+If a step requires my credentials, approval, or manual environment setup, stop at that step and give me precise instructions.
+
+Do not proceed with destructive operations without explicit approval.
+
+Continue to the next independent phase whenever the previous phase has been successfully verified.
+
+# 8. FINAL ACCEPTANCE CRITERIA
+
+The project should only be considered functionally complete when the following can be demonstrated:
+
+- All application services start reliably.
+- All role workspaces function.
+- Keycloak login and refresh work.
+- PostgreSQL persists application data.
+- HAPI FHIR R4 performs actual resource CRUD.
+- Consent is enforced server-side.
+- Consent expiry and revocation work.
+- Named-practitioner organization authorization works.
+- Clinical files remain off-chain.
+- The full laboratory workflow works.
+- Fabric receives and commits permitted events.
+- Committed transaction IDs can be verified.
+- New audit events preserve chain integrity.
+- Historical audit mismatch #33 remains documented as deferred, with no historical records altered.
+- Existing and newly added tests pass.
+- Frontend production build passes.
+- OWASP ZAP assessment is completed.
+- Actual k6 results are recorded.
+- PostgreSQL backup and isolated restore are verified.
+- Documentation accurately describes the working system.
+
+# 9. REQUIRED FINAL DOCUMENTATION
+
+Maintain these files:
+
+- README.md
+- PROJECT_STATUS.md
+- IMPLEMENTATION_STATUS.md
+- ARCHITECTURE_REVIEW.md
+- COMPLETION_ROADMAP.md
+- SECURITY_ASSESSMENT.md
+- DEPLOYMENT_GUIDE.md
+- TESTING_REPORT.md
+
+Document exact commands, environment variables, service startup order, test results, and limitations.
+
+Clearly distinguish:
+
+- Implemented.
+- Unit tested.
+- Integration tested with mocks.
+- Verified against a real local service.
+- Not yet verified.
+- Deferred.
+
+# 10. START NOW
+
+Begin with PHASE 0.
+
+Inspect the actual repository and compare the source code against PROJECT_STATUS.md.
+
+Then create/update the implementation documents and proceed with the highest-priority unfinished work.
+
+Do not stop after writing a plan.
+
+Your objective is to finish and verify the existing HealthHarbor system, not merely produce code that looks complete.
+
+At every stage, prioritize correctness, security, interoperability, maintainability, and demonstrable results.

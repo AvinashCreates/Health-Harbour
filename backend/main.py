@@ -60,9 +60,22 @@ app = FastAPI(
 
 @app.exception_handler(FHIRIntegrationError)
 async def fhir_integration_error_handler(request: Request, exc: FHIRIntegrationError):
+    logger.warning(
+        "FHIR integration request failed",
+        extra={
+            "http_method": request.method,
+            "fhir_operation": exc.operation or "unspecified",
+            "fhir_upstream_status": exc.upstream_status_code,
+            "http_status": exc.status_code,
+        },
+    )
+    detail = {
+        409: "FHIR resource conflict",
+        422: "FHIR request could not be processed",
+    }.get(exc.status_code, "FHIR service is unavailable")
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": str(exc)},
+        content={"detail": detail},
     )
 
 allowed_origins = [

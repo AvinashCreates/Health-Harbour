@@ -323,6 +323,37 @@ class FHIRIntegrationTests(unittest.TestCase):
         )
         self.assertNotIn("data", resource["provision"])
 
+    def test_organization_consent_names_practitioner_and_treatment_purpose(self):
+        start = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        end = start + timedelta(days=30)
+        resource = fhir_builder.build_consent(
+            "consent-id",
+            "patient-id",
+            "practitioner-id",
+            ["Patient"],
+            start,
+            end,
+            organization_ref="organization-id",
+        )
+        self.assertEqual(
+            resource["performer"],
+            [{"reference": "Patient/patient-id"}],
+        )
+        self.assertEqual(
+            [
+                (actor["role"]["coding"][0]["code"], actor["reference"]["reference"])
+                for actor in resource["provision"]["actor"]
+            ],
+            [
+                ("PRCP", "Practitioner/practitioner-id"),
+                ("ORG", "Organization/organization-id"),
+            ],
+        )
+        self.assertEqual(
+            resource["provision"]["purpose"][0]["coding"][0]["code"],
+            "TREAT",
+        )
+
     @patch.dict(os.environ, {"FHIR_MODE": "hapi", "FHIR_SERVER_URL": "http://hapi/fhir"})
     @patch("services.fhir_server._client")
     def test_persists_validated_r4_resource_and_returns_server_version(self, client_factory):

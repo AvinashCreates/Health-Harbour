@@ -180,8 +180,10 @@ documentation or commits.
 - Backend authorization checks role, consent scope, ownership, lab identity,
   technician membership, and assignment to a specific workflow.
 - CORS allowlist and baseline response headers are configured.
-- The login rate limiter is process-local; use shared storage (e.g. Redis) for
-  horizontally scaled API replicas. It is not a distributed limiter today.
+- Login throttling now uses HMAC-keyed shared database state and atomic
+  PostgreSQL/SQLite upserts. Verify the migration and cross-instance behavior
+  on PostgreSQL before production scaling; source-IP throttling is not
+  included.
 - The prototype lacks production-grade operational guarantees such as
   external secrets management, encryption/key lifecycle policy, malware
   scanning, immutable backup/recovery proof, and a completed security review.
@@ -344,8 +346,9 @@ work plan.
 - Default API URL derives from the current host at port 8000, or
   `VITE_API_BASE` can override it. Browser URL/CORS origins must match
   `localhost` vs `127.0.0.1`.
-- Seeded local demo password documented in README: `Demo@1234`. Do not reuse it
-  outside a disposable local demo.
+- Local seed runs require a strong explicit `DEMO_SEED_PASSWORD`; production
+  bootstrap creates only an explicitly configured administrator. Existing
+  demo accounts are not automatically rotated or removed.
 
 ### Tests (recheck before reporting)
 

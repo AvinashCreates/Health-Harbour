@@ -10,6 +10,14 @@ schema were verified on the user's Arch Linux machine on 2026-11-25. End-to-end
 FHIR resource operations, live Keycloak authentication, Fabric ledger commits,
 ZAP findings, and meaningful load-test results remain unverified. See
 [PROJECT_STATUS.md](./PROJECT_STATUS.md) for the evidence and remaining work.
+See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for current
+phase-level verification, [ARCHITECTURE_REVIEW.md](./ARCHITECTURE_REVIEW.md)
+for the system boundaries, [COMPLETION_ROADMAP.md](./COMPLETION_ROADMAP.md)
+for remaining acceptance work, [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+for safe startup and recovery commands, and [TESTING_REPORT.md](./TESTING_REPORT.md)
+for actual test evidence and limitations. The source-level review is in
+[SECURITY_ASSESSMENT.md](./SECURITY_ASSESSMENT.md); it is not a substitute for
+a live ZAP scan.
 
 ## Run locally
 
@@ -22,7 +30,11 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
+# Enter a strong local-only demo password when prompted; it is not printed.
+read -rsp "Local demo seed password: " DEMO_SEED_PASSWORD; printf '\n'
+export DEMO_SEED_PASSWORD
 python seed.py
+unset DEMO_SEED_PASSWORD
 uvicorn main:app --reload
 
 # Terminal 2: React app
@@ -33,7 +45,9 @@ npm run dev
 ```
 
 Open http://localhost:5173. API documentation is at
-http://localhost:8000/docs. Local demo accounts use password `Demo@1234`:
+http://localhost:8000/docs. The local demo users share the password you
+entered for `DEMO_SEED_PASSWORD`; the seed script does not use or print a
+default password:
 
 | Role | Email |
 |---|---|
@@ -44,14 +58,35 @@ http://localhost:8000/docs. Local demo accounts use password `Demo@1234`:
 | Laboratory | `lab@example.com` |
 | Administrator | `admin@example.com` |
 
+Re-running the seed script does not reset passwords for accounts that already
+exist. Rotate or disable legacy demo users explicitly before using a database
+outside local development.
+
 Public local registration creates patient accounts only. Staff accounts must
 be provisioned by an authenticated administrator. An administrator associates
-technicians with labs using `POST /auth/laboratory-memberships`.
+technicians with labs using `POST /auth/laboratory-memberships`. For
+organization consent, an administrator must also link each named physician to
+the lab organization with `POST /auth/organization-memberships`; removing that
+membership immediately invalidates the physician's organization-based grants.
+
+For production, set `APP_ENV=production` and configure a strong
+`INITIAL_ADMIN_PASSWORD`, `INITIAL_ADMIN_EMAIL`, and `INITIAL_ADMIN_NAME` only
+for the one-time seed command. Production seeding creates only that
+administrator; it does not create synthetic patients, physicians, or clinical
+workflow data. Do not pass bootstrap credentials to the long-running API
+process. Existing demo accounts in an already-populated database are not
+automatically deleted or rotated; review and disable them before production.
+For a one-time Docker bootstrap, set `APP_ENV=production` in the Compose
+environment, export the initial administrator's email/name, enter the password
+at a hidden prompt, and pass those three variables only to
+`docker compose exec -e ... backend python seed.py`.
 
 ## Core workflow
 
-1. A patient chooses a physician, FHIR resource scopes, and a duration of
-   1–30 days; consent can be revoked early.
+1. A patient chooses a physician directly or a healthcare organization plus
+   one named physician in that organization, then selects FHIR resource scopes
+   and a duration of 1–30 days. All grants are limited to treatment purpose
+   and can be revoked early.
 2. The physician selects a consented patient and a laboratory, then creates a
    ServiceRequest with an `Idempotency-Key`. Retrying the same key returns the
    same request; reusing it for different input is rejected.
@@ -97,7 +132,7 @@ The prototype does not provide those production storage safeguards.
 cd backend
 DB_AUTO_CREATE=1 DATABASE_URL=sqlite:///./test.db python test_api.py
 DB_AUTO_CREATE=1 DATABASE_URL=sqlite:///./security-test.db python test_security.py
-python -m unittest test_integrations test_files test_audit_logger -v
+python -m unittest test_organization_consent test_integrations test_files test_audit_logger -v
 alembic upgrade head
 alembic check
 
@@ -126,9 +161,15 @@ prototype benchmark numbers as current results.
 
 ```bash
 cp .env.example .env
-# Replace every placeholder credential/key before running.
+# Replace every placeholder credential/key before running. Seed credentials
+# are entered separately for the one-shot command and are not given to the API.
 docker compose up --build
-docker compose exec backend python seed.py
+# Export a strong, unique password in the shell first; it is not stored in the
+# backend container or printed by the seeder.
+read -rsp "Local demo seed password: " DEMO_SEED_PASSWORD; printf '\n'
+export DEMO_SEED_PASSWORD
+docker compose exec -e DEMO_SEED_PASSWORD backend python seed.py
+unset DEMO_SEED_PASSWORD
 ```
 
 The backend container runs `alembic upgrade head` before starting FastAPI.
@@ -242,8 +283,9 @@ produced.
 - API responses include no-store and baseline browser security headers.
 - Passwords are bcrypt-hashed in local mode. Synthetic data only; do not use
   this prototype to store real patient data.
-- The local login rate limiter is process-local and is not shared across API
-  workers. Use a shared limiter before horizontal production scaling.
+- Login failures are stored in the shared database, so API workers using the
+  same database and `JWT_SECRET` share account lockouts. The limiter does not
+  replace network-level abuse controls.
 - The supplied ZAP and k6 runners refuse non-loopback targets and are intended
   for controlled local evaluation only. A ZAP baseline is not a full
   penetration test; no current scan or meaningful load result is available.

@@ -16,6 +16,7 @@ import models
 from database import get_db
 from deps import get_current_user
 from services import audit_logger, fhir_builder
+from services.consent_access import consented_patient_ids, has_active_consent
 from services.fhir_server import authoritative_resource, fhir_mode, persist_resource
 
 router = APIRouter(prefix="/files", tags=["clinical files"])
@@ -43,14 +44,7 @@ def _storage_root() -> Path:
 
 
 def _active_document_consent(db: Session, patient_id: str, physician_id: str) -> bool:
-    now = datetime.utcnow()
-    consents = db.query(models.Consent).filter(
-        models.Consent.patient_id == patient_id,
-        models.Consent.grantee_id == physician_id,
-        models.Consent.revoked_at.is_(None),
-        models.Consent.expires_at > now,
-    ).all()
-    return any("Document" in (consent.resource_types or []) for consent in consents)
+    return has_active_consent(db, patient_id, physician_id, "Document")
 
 
 def _workflow_for_file(
@@ -228,16 +222,7 @@ def list_files(
     if current_user.role == "patient":
         query = query.filter(models.ClinicalFile.patient_id == current_user.id)
     elif current_user.role == "doctor":
-        now = datetime.utcnow()
-        consents = db.query(models.Consent).filter(
-            models.Consent.grantee_id == current_user.id,
-            models.Consent.revoked_at.is_(None),
-            models.Consent.expires_at > now,
-        ).all()
-        patient_ids = {
-            consent.patient_id for consent in consents
-            if "Document" in (consent.resource_types or [])
-        }
+        patient_ids = consented_patient_ids(db, current_user.id, "Document")
         if not patient_ids:
             return []
         query = query.filter(models.ClinicalFile.patient_id.in_(patient_ids))
@@ -314,16 +299,7 @@ def list_document_patients(
 ):
     if current_user.role != "doctor":
         raise HTTPException(status_code=403, detail="Only physicians can select patients for file uploads")
-    now = datetime.utcnow()
-    consents = db.query(models.Consent).filter(
-        models.Consent.grantee_id == current_user.id,
-        models.Consent.revoked_at.is_(None),
-        models.Consent.expires_at > now,
-    ).all()
-    patient_ids = {
-        consent.patient_id for consent in consents
-        if "Document" in (consent.resource_types or [])
-    }
+    patient_ids = consented_patient_ids(db, current_user.id, "Document")
     if not patient_ids:
         return []
     patients = db.query(models.User).filter(

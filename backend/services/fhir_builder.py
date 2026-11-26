@@ -116,8 +116,43 @@ def build_specimen(fhir_id, patient_ref, service_request_fhir_id, type_code, typ
     }
 
 
-def build_consent(fhir_id, patient_ref, practitioner_ref, resource_types, starts_at, ends_at, active=True) -> dict:
-    return {
+def build_consent(
+    fhir_id,
+    patient_ref,
+    practitioner_ref,
+    resource_types,
+    starts_at,
+    ends_at,
+    active=True,
+    organization_ref=None,
+    purpose="TREATMENT",
+) -> dict:
+    purpose_codes = {
+        "TREATMENT": ("TREAT", "Treatment"),
+    }
+    purpose_code, purpose_display = purpose_codes[purpose]
+    actors = [{
+        "role": {
+            "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                "code": "PRCP",
+                "display": "Primary information recipient",
+            }],
+        },
+        "reference": {"reference": f"Practitioner/{practitioner_ref}"},
+    }]
+    if organization_ref:
+        actors.append({
+            "role": {
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ORG",
+                    "display": "Organization",
+                }],
+            },
+            "reference": {"reference": f"Organization/{organization_ref}"},
+        })
+    consent = {
         "resourceType": "Consent",
         "id": fhir_id,
         "status": "active" if active else "inactive",
@@ -137,10 +172,19 @@ def build_consent(fhir_id, patient_ref, practitioner_ref, resource_types, starts
         }],
         "patient": {"reference": f"Patient/{patient_ref}"},
         "dateTime": starts_at.isoformat(),
-        "performer": [{"reference": f"Practitioner/{practitioner_ref}"}],
+        "performer": [{"reference": f"Patient/{patient_ref}"}],
         "provision": {
             "type": "permit",
             "period": {"start": starts_at.isoformat(), "end": ends_at.isoformat()},
+            "actor": actors,
+            "purpose": [{
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ActReason",
+                    "code": purpose_code,
+                    "display": purpose_display,
+                }],
+                "text": purpose_display,
+            }],
             "code": [{
                 "coding": [{
                     "system": "urn:wirachain:consent-resource-type",
@@ -151,3 +195,4 @@ def build_consent(fhir_id, patient_ref, practitioner_ref, resource_types, starts
             } for resource_type in resource_types],
         },
     }
+    return consent

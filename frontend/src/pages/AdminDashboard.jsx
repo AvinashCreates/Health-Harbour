@@ -4,17 +4,25 @@ import TransferStatus from '../components/TransferStatus'
 
 export default function AdminDashboard({ token }) {
   const [log, setLog] = useState([])
+  const [organizationMemberships, setOrganizationMemberships] = useState([])
   const [verify, setVerify] = useState(null)
   const [err, setErr] = useState('')
   const [message, setMessage] = useState('')
   const [creating, setCreating] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [linkingPractitioner, setLinkingPractitioner] = useState(false)
   const [membership, setMembership] = useState({ laboratory_email: '', technician_email: '' })
+  const [organizationMembership, setOrganizationMembership] = useState({ organization_email: '', practitioner_email: '' })
   const [account, setAccount] = useState({ full_name: '', email: '', password: '', identity_subject: '', role: 'doctor' })
 
   async function refresh() {
     try {
-      setLog(await api.auditLog(token))
+      const [auditEntries, memberships] = await Promise.all([
+        api.auditLog(token),
+        api.listOrganizationMemberships(token),
+      ])
+      setLog(auditEntries)
+      setOrganizationMemberships(memberships)
     } catch (e) { setErr(e.message) }
   }
 
@@ -62,6 +70,35 @@ export default function AdminDashboard({ token }) {
     }
   }
 
+  async function addOrganizationPractitioner(e) {
+    e.preventDefault()
+    setErr('')
+    setMessage('')
+    setLinkingPractitioner(true)
+    try {
+      await api.addOrganizationPractitioner(organizationMembership, token)
+      setMessage('Named physician added to the organization.')
+      setOrganizationMembership({ organization_email: '', practitioner_email: '' })
+      await refresh()
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setLinkingPractitioner(false)
+    }
+  }
+
+  async function removeOrganizationPractitioner(id) {
+    setErr('')
+    if (!window.confirm('Remove this physician from the organization? Organization consents will stop authorizing access immediately.')) return
+    try {
+      await api.removeOrganizationPractitioner(id, token)
+      setMessage('Physician removed from the organization.')
+      await refresh()
+    } catch (e) {
+      setErr(e.message)
+    }
+  }
+
   return (
     <div className="grid">
       <section className="card">
@@ -99,6 +136,34 @@ export default function AdminDashboard({ token }) {
           <button className="btn-primary" type="submit" disabled={assigning}>{assigning ? 'Adding…' : 'Add to laboratory'}</button>
           {assigning && <TransferStatus>Updating laboratory membership</TransferStatus>}
         </form>
+        {message && <div className="success" role="status">{message}</div>}
+        {err && <div className="error" role="alert">{err}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">ORGANIZATION CONSENT</p>
+        <h2>Manage named physicians</h2>
+        <p className="muted">Patients can grant organization access only to a named physician with an active membership. Membership is restricted to treatment-purpose consent.</p>
+        <form onSubmit={addOrganizationPractitioner} className="stacked-form">
+          <label>Laboratory organization email<input required type="email" value={organizationMembership.organization_email} onChange={(e) => setOrganizationMembership((m) => ({ ...m, organization_email: e.target.value }))} /></label>
+          <label>Physician email<input required type="email" value={organizationMembership.practitioner_email} onChange={(e) => setOrganizationMembership((m) => ({ ...m, practitioner_email: e.target.value }))} /></label>
+          <button className="btn-primary" type="submit" disabled={linkingPractitioner}>{linkingPractitioner ? 'Saving…' : 'Add named physician'}</button>
+          {linkingPractitioner && <TransferStatus>Updating organization membership</TransferStatus>}
+        </form>
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>Organization</th><th>Physician</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {organizationMemberships.map((item) => (
+              <tr key={item.id}>
+                <td>{item.organization_name}</td>
+                <td>{item.practitioner_name}</td>
+                <td>{item.active ? 'Active' : 'Removed'}</td>
+                <td>{item.active && <button className="btn-ghost" onClick={() => removeOrganizationPractitioner(item.id)}>Remove</button>}</td>
+              </tr>
+            ))}
+            {organizationMemberships.length === 0 && <tr><td colSpan={4} className="muted">No named physician memberships yet.</td></tr>}
+          </tbody>
+        </table></div>
         {message && <div className="success" role="status">{message}</div>}
         {err && <div className="error" role="alert">{err}</div>}
       </section>

@@ -12,8 +12,44 @@ from database import Base, DATABASE_URL, SessionLocal, engine
 from services import audit_logger, fhir_builder
 from services.fhir_server import persist_resource
 
+
+def _configured_password(environment_name):
+    password = os.getenv(environment_name)
+    if password is None:
+        raise RuntimeError(f"{environment_name} must be explicitly configured before seeding")
+    encoded = password.encode("utf-8")
+    if (
+        len(password) < 16
+        or len(encoded) > 72
+        or not any(char.islower() for char in password)
+        or not any(char.isupper() for char in password)
+        or not any(char.isdigit() for char in password)
+        or not any(not char.isalnum() for char in password)
+    ):
+        raise RuntimeError(
+            f"{environment_name} must be 16-72 UTF-8 bytes and include "
+            "lowercase, uppercase, numeric, and special characters"
+        )
+    return password
+
+
 if os.getenv("AUTH_PROVIDER", "local").lower() == "keycloak":
-    raise RuntimeError("Demo password seeding is disabled with Keycloak authentication")
+    raise RuntimeError("Local account seeding is disabled with Keycloak authentication")
+
+production = os.getenv("APP_ENV", "development").lower() == "production"
+if production:
+    initial_admin_email = os.getenv("INITIAL_ADMIN_EMAIL", "").strip().lower()
+    initial_admin_name = os.getenv("INITIAL_ADMIN_NAME", "").strip()
+    initial_admin_password = _configured_password("INITIAL_ADMIN_PASSWORD")
+    if (
+        "@" not in initial_admin_email
+        or len(initial_admin_email) > 254
+        or not 2 <= len(initial_admin_name) <= 120
+    ):
+        raise RuntimeError("A valid INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_NAME are required")
+else:
+    demo_password = _configured_password("DEMO_SEED_PASSWORD")
+
 if DATABASE_URL.startswith("sqlite") or os.getenv("DB_AUTO_CREATE") == "1":
     Base.metadata.create_all(bind=engine)
 else:
@@ -22,7 +58,27 @@ else:
         raise RuntimeError("Run `alembic upgrade head` before seeding PostgreSQL")
 db = SessionLocal()
 
-DEMO_PASSWORD = "Demo@1234"
+if production:
+    initial_admin = db.query(models.User).filter(
+        models.User.email == initial_admin_email,
+    ).first()
+    if initial_admin is not None and initial_admin.role != "admin":
+        db.close()
+        raise RuntimeError("INITIAL_ADMIN_EMAIL already belongs to a non-administrator account")
+    if initial_admin is None:
+        initial_admin = models.User(
+            full_name=initial_admin_name,
+            email=initial_admin_email,
+            hashed_password=hash_password(initial_admin_password),
+            role="admin",
+        )
+        db.add(initial_admin)
+        db.commit()
+        print("Initial administrator account created.")
+    else:
+        print("Initial administrator account already exists; no credentials were changed.")
+    db.close()
+    raise SystemExit(0)
 
 
 def make_user(full_name, email, role):
@@ -30,7 +86,7 @@ def make_user(full_name, email, role):
     user = existing or models.User(
         full_name=full_name,
         email=email,
-        hashed_password=hash_password(DEMO_PASSWORD),
+        hashed_password=hash_password(demo_password),
         role=role,
     )
     if existing is None:
@@ -60,7 +116,7 @@ def make_user(full_name, email, role):
     return user
 
 
-print(f"Seeding demo accounts (password for all: {DEMO_PASSWORD}) ...")
+print("Seeding local demo accounts...")
 patient1 = make_user("Asha Rao", "asha.patient@example.com", "patient")
 patient2 = make_user("Vikram Nair", "vikram.patient@example.com", "patient")
 doctor1 = make_user("Dr. Priya Sharma", "priya.doctor@example.com", "doctor")
@@ -160,7 +216,7 @@ if not already_seeded:
 else:
     print("Sample workflow already present -- skipped.")
 
-print("\nDemo accounts (all passwords: " + DEMO_PASSWORD + "):")
+print("\nLocal demo accounts seeded; password is not displayed.")
 for u in [patient1, patient2, doctor1, doctor2, lab1, admin1]:
     print(f"  {u.role:8s} {u.email}")
 

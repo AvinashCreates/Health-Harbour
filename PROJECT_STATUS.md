@@ -16,7 +16,10 @@ production interoperability.
   expiry, and subject; ambiguous application-role claims are denied.
 - Patient-only public registration in local mode; admin-provisioned staff.
 - Consent is resource-scoped, lasts 1–30 days, expires server-side, and can be
-  revoked immediately. Access history is available to the patient.
+  revoked immediately. Patients may target one physician or an organization
+  plus one named physician; organization grants are treatment-only and require
+  active administrator-managed membership. Access history is available to the
+  patient.
 - Explicit lab workflow:
   `REQUESTED → ACCEPTED → ASSIGNED → SPECIMEN_REGISTERED → PROCESSING →
   RESULTS_SUBMITTED → FINALIZED → PHYSICIAN_REVIEWED`.
@@ -124,6 +127,35 @@ production interoperability.
   remain unverified. Python emitted `datetime.utcnow()` deprecation warnings;
   they did not fail the checks.
 
+## Repeat verification (2026-11-26)
+
+- Re-ran the 30 integration/file/audit/load-runner unit tests; all passed.
+- Re-ran `test_api.py`, `test_security.py`, and a fresh SQLite migration plus
+  `alembic check`; all passed.
+- Started a seeded local API on an isolated loopback port. Health, patient
+  login, authenticated profile, file listing, patient resource retrieval by
+  ID, and ServiceRequest listing all returned expected successful responses.
+  An initial `GET /fhir/Patient` returned 404 because this API exposes an
+  individual patient resource at `/fhir/Patient/{patient_id}`, not a patient
+  collection endpoint; the correct route returned 200. This was an invalid
+  smoke-test URL, not a backend regression.
+- Port 8000 did not answer the initial probe in this environment; the isolated
+  API test on another loopback port succeeded. Do not stop or modify any
+  unknown process occupying a port.
+- At this point in the investigation, the previous browser observation
+  reported entry #33 among 108 events, but the source database was not
+  available here. The exact PostgreSQL finding was later reproduced by the
+  user with the read-only inspector; see the PostgreSQL forensic evidence
+  below. Current local SQLite results are separate; no historical rows were
+  rewritten.
+- `datetime.utcnow()` deprecation warnings remain. They do not fail tests but
+  should be migrated to timezone-aware UTC timestamps in a separate,
+  compatibility-tested change.
+- Frontend build/browser automation, Go tests, Docker-based services, live
+  HAPI/Keycloak/Fabric, ZAP, and k6 remain unverified because their runtimes
+  were unavailable. These are environment or integration-coverage gaps, not
+  failures reported by the passing backend test suites.
+
 Additional user-run checks on Arch Linux:
 
 - Docker Compose showed PostgreSQL healthy and the backend running; API
@@ -139,9 +171,165 @@ environment. Live Keycloak flows, end-to-end FHIR resource operations, actual
 Fabric network commits, ZAP, and meaningful load tests remain outstanding.
 Earlier logs showed a temporary Compose DNS failure resolving `db`; the later
 user-provided health checks showed database connectivity restored. The admin
-dashboard has also reported an invalid local audit chain beginning at entry
-#33; preserve that warning and investigate historical data without rewriting
-it.
+dashboard previously reported an invalid audit chain beginning at entry #33
+when its API returned 108 audit entries. The UI renders the result of the
+admin-only `/audit/verify` endpoint; it does not invent the broken-entry ID.
+On 2026-11-26, the currently available local SQLite files were independently
+verified read-only using the same hash and previous-link checks as
+`services/audit_logger.py`: `healthcare.db` had 3 valid audit entries, while
+`healthharbor-run.db` had 20 entries and a real chain mismatch at entry #16
+(both the stored previous link and recomputed hash failed there). These are
+separate SQLite files and are not the PostgreSQL audit history. Preserve all
+copies; do not rewrite audit rows.
+
+On 2026-11-26, a read-only connection attempt to the configured Compose
+PostgreSQL endpoint (`127.0.0.1:5432`, database `healthcare_exchange`) did not
+complete PostgreSQL protocol negotiation. The TCP port accepted a connection
+but did not return the PostgreSQL SSL-negotiation response; Docker tooling was
+unavailable here, so the service/container state could not be inspected and no
+PostgreSQL rows were read or changed in this environment. The user subsequently
+ran the forensic inspector successfully against the PostgreSQL deployment.
+
+On 2026-11-26, the user ran the read-only inspector against the live
+PostgreSQL database `healthcare_exchange`: 113 audit rows; first mismatch
+entry #33 (`DATA_ACCESSED`, `2026-11-25T12:49:22.752695`). Its stored
+`prev_hash` is `91c69ef747c49880e5b62a8e868eebf64bbdd084215f1341bb7d3d9f506e620a`,
+while the preceding chain hash expected by verification is
+`60af6590d97dbb723572bb8b78543879a33809cbf59ff443ba6c624ce456ef65`. Its
+stored `curr_hash` is
+`8aaf7a38a4ed93fd074340c43364c31ab2fb1277a4e7a8b4d89a1b0ffbd38464`,
+while recomputation from the expected chain link is
+`c32b26863db06af391f1769a8e400caa89d8067eddd8d66282edaa00b0a6d461`.
+The user then reran the enhanced inspector: recomputation using #33's stored
+previous hash exactly matches its stored current hash
+(`current_hash_matches_stored_prev=true`). Thus #33's own event payload,
+actor, type, timestamp, and hash serialization are internally consistent with
+its stored commitment; the discontinuity is specifically that #33 points to a
+different predecessor than #32's current hash. The likely class of cause is a
+broken/forked chain link at insertion time or later alteration of `prev_hash`;
+the available evidence cannot distinguish those histories. The chain is
+cryptographically inconsistent from #33 onward, and this result is not
+evidence of which actor or process caused it. No database records have been
+altered.
+
+## Login/connectivity investigation (2026-11-26)
+
+- User-provided Compose status showed only `backend` and `db` running; the
+  database was healthy and backend process was up. The frontend is a separate
+  Vite process, not a Compose service in this setup.
+- User-provided `curl` to host `127.0.0.1:8000/health` connected but timed out
+  without an HTTP response. The in-container health request returned HTTP 503.
+  `/health` checks both SQL connectivity and configured FHIR readiness. Since
+  HAPI was not listed among running Compose services, a `FHIR_MODE=hapi`
+  configuration without the `fhir` profile would explain the 503; the active
+  container setting and response body still need confirmation.
+- User then confirmed the active backend environment: `AUTH_PROVIDER=local`,
+  `FHIR_MODE=hapi`; `/health` returns
+  `{"detail":"FHIR server readiness check failed"}`. This establishes that
+  HAPI readiness is one confirmed service fault. Start the `fhir` Compose
+  profile and wait for HAPI R4 metadata readiness, or intentionally configure
+  local FHIR mode for a local-only run.
+- User later started the HAPI profile. HAPI logs report
+  `Started Application in 76.819 seconds` at 2026-11-26T12:16:24Z, but host
+  requests to both `127.0.0.1:8081/fhir/metadata` and
+  `127.0.0.1:8000/health` still timed out for 10 seconds. Therefore "wait for
+  HAPI startup" alone did not resolve the issue. Need compare backend-to-HAPI
+  service connectivity from inside the backend container with host port
+  forwarding, then inspect fresh backend/HAPI logs.
+- User subsequently confirmed from inside the backend container: backend root
+  returned HTTP 200, HAPI metadata returned HTTP 200 with a
+  `CapabilityStatement`, and backend `/health` returned HTTP 200 with database
+  connected and FHIR `hapi`. In contrast, host requests to both published
+  ports `127.0.0.1:8000` and `127.0.0.1:8081` timed out. This isolates the
+  current availability problem to host access/Compose port publication or
+  host networking rather than app health, DB connectivity, or HAPI readiness.
+  Follow-up read-only probes to the container IPs `172.19.0.2:8000` and
+  `172.19.0.4:8080` also timed out from the host, despite Docker proxy
+  listeners existing for the published localhost ports. A local-mode admin
+  login executed inside the backend container returned HTTP 200 and an admin
+  profile. This rules out invalid demo credentials and application login
+  handling for the in-container path. The current fault is isolated to host
+  routing/bridge reachability, affecting both published services. No Docker
+  containers, firewall rules, or databases were changed during diagnosis.
+- Host `ip route get 172.19.0.2` selected the physical Wi-Fi route
+  (`via 10.76.199.230 dev wlp4s0`) rather than the Compose bridge for subnet
+  `172.19.0.0/16`. This strongly indicates a routing conflict or missing route
+  for the Docker bridge and explains why both direct container-IP access and
+  docker-proxy-published host ports time out while in-container requests work.
+  Inspect bridge interface/address and all matching routes before changing
+  Compose IPAM; choose a subnet only after confirming it does not overlap VPN,
+  LAN, or other Docker networks.
+- Further host diagnostics confirmed bridge `br-7dc8efe54912` is UP but has
+  no displayed IP address; there is no route for `172.19.0.0/16`, and route
+  lookups for both bridge gateway `172.19.0.1` and backend `172.19.0.2` go via
+  Wi-Fi. Other Docker networks use `172.17.0.0/16` and `172.18.0.0/16`.
+  This points to a missing/unconfigured Compose bridge address/route, not an
+  app or login defect. A plain `docker compose down` did not remove the
+  project network (`Resource is still in use`); the subsequent `up --profile
+  fhir` reused the existing HAPI container/network, so it did not actually
+  recreate the bridge. Retry teardown with `docker compose --profile fhir
+  down` so the HAPI profile container is included, without `-v`; verify the
+  network has no attached containers and is removed before starting services
+  again. Do not choose a different subnet until checking all VPN/LAN routes
+  and networks for overlap.
+- Browser console output showed repeated Vite WebSocket disconnects. That
+  indicates the separate development server connection is being lost; keep
+  `npm run dev` running and confirm it is healthy independently.
+- `frontend/src/api.js` now bounds API requests to 15 seconds and surfaces
+  timeout/network errors, preventing an indefinite login spinner. A frontend
+  build could not be run in this environment because Node/npm are unavailable.
+- A user-run direct POST to `/auth/login` timed out. The provided backend log
+  excerpt contains historical HAPI schema-table errors from 2026-11-25 and a
+  later startup, but not recent request-time logs, so it does not yet explain
+  the current login timeout. Account/auth failure is not distinguished from a
+  database/audit-write stall or frontend-to-API connectivity failure.
+
+### Host networking follow-up
+
+- User ran `docker compose --profile fhir down`; backend, HAPI, database, and
+  the project network were removed without `-v`. The named data volumes were
+  not explicitly removed.
+- Recreated `db`, `backend`, and `hapi`. The new bridge
+  `br-f813bc5aac5a` has gateway `172.19.0.1/16`, and the host route to
+  `172.19.0.2` now correctly uses that bridge. This resolves the previously
+  diagnosed missing-route condition.
+- Immediate host curls returned connection reset/empty reply shortly after
+  Compose reported containers started. This is not yet a successful HTTP
+  check; retry after startup/readiness and inspect fresh logs if responses
+  still fail. Do not remove volumes or alter firewall rules.
+- After profile-aware teardown/recreation, the Docker bridge acquired
+  `172.19.0.1/16` and host routes to `172.19.0.2` through that bridge. User
+  then verified HAPI metadata HTTP 200, backend `/health` HTTP 200 with
+  database connected and `fhir: hapi`, login HTTP 200 as admin from both
+  inside the backend container and the Arch host. This confirms the previous
+  host-routing issue is resolved and local admin credentials/API login work.
+  Refresh Vite and test the browser login; the Vite dev server remains a
+  separate process and must be running.
+- Follow-up investigation of the browser's "Could not connect" message found
+  `localhost` resolves to IPv6 `::1` first on this Arch host while Compose
+  publishes the API only on IPv4 `127.0.0.1`. Host `localhost:8000` happened
+  to work with curl's address fallback, but browser fetch may fail on the
+  IPv6 attempt. The frontend default API host and `.env.example` now use
+  `127.0.0.1` for the local API. IPv4 API health, HAPI R4 metadata, and the
+  `http://localhost:5173` CORS preflight all returned HTTP 200 here. Frontend
+  production build remains unverified because Node/npm are unavailable in
+  this environment; the running Vite instance should hot-reload the source,
+  or be restarted after setting `VITE_API_BASE=http://127.0.0.1:8000`.
+- After the IPv4 API target change, browser-based admin sign-in was completed
+  successfully with the seeded local admin account. The Administrator
+  Overview loaded from the live backend and displayed 113 audit events with
+  the verifier reporting a break at entry #33. This re-confirms the #33
+  warning against the active PostgreSQL-backed Compose deployment; it is not
+  a UI-only label. Historical audit rows remain untouched.
+- Added `backend/inspect_audit_chain.py`, a read-only forensic command that
+  reports the first mismatch, event type/timestamp, stored and expected
+  previous hashes, and stored/recomputed current hashes without printing the
+  event payload. It returned valid for the 3-row local `healthcare.db` and
+  correctly diagnosed the known 20-row SQLite mismatch at #16; the audit
+  concurrency regression test passed. The source PostgreSQL #33 mismatch has
+  not yet been inspected for stored-vs-recomputed details or root cause.
+  Compose copies backend files into its image, so rebuild the backend image
+  before running this new script inside an already-existing container.
 
 Older performance figures in prior revisions are not current measurements
 and must not be cited as results for this version.
@@ -159,8 +347,59 @@ and must not be cited as results for this version.
 - Build the adapter image, deploy the Fabric network, submit test events, and
   verify committed transaction IDs on-ledger.
 - Execute and review the OWASP ZAP baseline and current-stack load tests.
-- Replace process-local login rate limiting with a shared store before
-  horizontal API scaling; complete broader organization-level authorization
-  and operational hardening.
+- Validate the database-backed login limiter migration against PostgreSQL and
+  confirm shared lockout behavior across API instances; validate
+  named-practitioner organization consent against live PostgreSQL/HAPI, then
+  continue operational hardening.
 
 Use synthetic data only. This prototype is not a production clinical system.
+
+## Named-practitioner organization consent implementation
+
+- Added administrator-managed organization/physician memberships. Membership
+  removal blocks organization-based access immediately; direct physician
+  consent remains separate.
+- Patient consent can now target a lab organization and one named physician.
+  Backend authorization enforces active membership, patient scope, expiration,
+  revocation, resource type, and treatment-only purpose on protected reads,
+  including clinical files.
+- FHIR Consent construction now identifies the practitioner and organization
+  and records the treatment purpose. The patient and administrator React
+  workspaces expose the grant and membership operations.
+- Added Alembic revision `71b6c4a2d9e1`. Fresh SQLite migration and schema
+  comparison passed. A pre-existing synthetic consent row survived upgrade,
+  downgrade, and re-upgrade; the user's PostgreSQL database was not changed.
+- Verification in this pass: 34 focused backend unit tests passed, both API
+  and security smoke scripts passed, and the fresh SQLite migration and
+  `alembic check` passed. `npm run build` was unavailable because npm is not
+  installed in the current environment.
+- The supplied browser tab showed an already-rendered Administrator view but
+  repeated Vite WebSocket `ERR_CONNECTION_REFUSED` events; hot reload and full
+  browser acceptance are not verified.
+- Live PostgreSQL migration and HAPI Consent validation/persistence have not
+  been run. Apply the migration in a backed-up deployment, then verify the
+  organization Consent round trip before treating this as live FHIR
+  interoperability.
+
+## Security hardening follow-up
+
+- Removed the hardcoded demo password and credential output. Local demo seeding
+  now requires an explicit strong password; production seeding creates only an
+  explicitly configured initial administrator. Existing seeded accounts are
+  deliberately not silently reset or removed.
+- File and document-patient listings now share the same named-practitioner
+  organization membership checks as file downloads.
+- Replaced process-local login lockout dictionaries with HMAC-keyed shared
+  database records, atomic SQLite/PostgreSQL upserts, stale-record cleanup,
+  success reset, and fail-closed `503` handling. Added migration
+  `8c41d6a2f705`.
+- FHIR integration errors now return generic client messages and log only
+  controlled operation/status metadata.
+- The focused hardening/file/consent/integration/audit unit suites passed
+  (46 tests), as did the isolated API and security smoke scripts. The full
+  SQLite Alembic chain and `alembic check` passed; no live PostgreSQL changes
+  were made.
+- The new limiter is account-keyed, not IP-keyed. Live PostgreSQL,
+  production-configuration, and ZAP verification remain outstanding.
+
+Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged.

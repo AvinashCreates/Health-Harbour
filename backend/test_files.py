@@ -181,6 +181,97 @@ class ClinicalFileApiTests(unittest.TestCase):
         self.assertEqual(upload_patients.status_code, 200)
         self.assertEqual(upload_patients.json(), [])
 
+    def test_organization_document_consent_requires_active_membership_for_lists(self):
+        uploaded = self._upload_patient_file(self.patient)
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        file_id = uploaded.json()["id"]
+        now = datetime.utcnow()
+        consent_db = self.session_factory()
+        try:
+            membership = models.OrganizationMembership(
+                organization_id=self.lab.id,
+                practitioner_id=self.doctor.id,
+                created_by=self.admin.id,
+                active=True,
+                created_at=now - timedelta(minutes=1),
+            )
+            consent_db.add(membership)
+            consent_db.add(models.Consent(
+                patient_id=self.patient.id,
+                grantee_id=self.doctor.id,
+                organization_id=self.lab.id,
+                purpose="TREATMENT",
+                resource_types=["Document"],
+                granted_at=now,
+                expires_at=now + timedelta(days=2),
+            ))
+            consent_db.commit()
+        finally:
+            consent_db.close()
+
+        self.assertEqual(
+            [item["id"] for item in self.client.get(
+                "/files", headers=self._headers(self.doctor),
+            ).json()],
+            [file_id],
+        )
+        self.assertEqual(
+            [item["id"] for item in self.client.get(
+                "/files/patients", headers=self._headers(self.doctor),
+            ).json()],
+            [self.patient.id],
+        )
+
+        consent_db = self.session_factory()
+        try:
+            consent_db.query(models.OrganizationMembership).filter_by(
+                organization_id=self.lab.id,
+                practitioner_id=self.doctor.id,
+            ).one().active = False
+            consent_db.commit()
+        finally:
+            consent_db.close()
+
+        self.assertEqual(self.client.get(
+            "/files", headers=self._headers(self.doctor),
+        ).json(), [])
+        self.assertEqual(self.client.get(
+            "/files/patients", headers=self._headers(self.doctor),
+        ).json(), [])
+
+    def test_membership_added_after_organization_consent_does_not_authorize_file_listing(self):
+        uploaded = self._upload_patient_file(self.patient)
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        now = datetime.utcnow()
+        consent_db = self.session_factory()
+        try:
+            consent_db.add(models.Consent(
+                patient_id=self.patient.id,
+                grantee_id=self.doctor.id,
+                organization_id=self.lab.id,
+                purpose="TREATMENT",
+                resource_types=["Document"],
+                granted_at=now - timedelta(minutes=1),
+                expires_at=now + timedelta(days=2),
+            ))
+            consent_db.add(models.OrganizationMembership(
+                organization_id=self.lab.id,
+                practitioner_id=self.doctor.id,
+                created_by=self.admin.id,
+                active=True,
+                created_at=now,
+            ))
+            consent_db.commit()
+        finally:
+            consent_db.close()
+
+        self.assertEqual(self.client.get(
+            "/files", headers=self._headers(self.doctor),
+        ).json(), [])
+        self.assertEqual(self.client.get(
+            "/files/patients", headers=self._headers(self.doctor),
+        ).json(), [])
+
     def test_patient_file_listing_uses_bounded_queries_as_file_count_grows(self):
         db = self.session_factory()
         try:

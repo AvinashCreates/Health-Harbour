@@ -102,18 +102,35 @@ class SpecimenCreate(BaseModel):
 
 
 class ConsentGrant(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     doctor_email: EmailStr
+    organization_id: str | None = Field(default=None, min_length=1, max_length=255)
     resource_types: List[FHIRResourceType] = Field(
         default_factory=lambda: ["Patient", "ServiceRequest", "Observation", "DiagnosticReport"],
         min_length=1,
     )
     duration_days: int = Field(default=30, ge=1, le=30)
 
+class OrganizationPractitionerCreate(BaseModel):
+    organization_email: EmailStr
+    practitioner_email: EmailStr
+
+
+class OrganizationMembershipOut(BaseModel):
+    id: str
+    organization_id: str
+    organization_name: str
+    practitioner_id: str
+    practitioner_name: str
+    active: bool
+
 
 class ConsentOut(BaseModel):
     id: str
     patient_id: str
     grantee_id: str
+    organization_id: Optional[str] = None
+    purpose: str = "TREATMENT"
     resource_types: List[str]
     granted_at: datetime
     expires_at: datetime

@@ -1,9 +1,10 @@
 import os
 import secrets
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 import models
 import rate_limit
@@ -127,6 +128,113 @@ def create_laboratory_membership(
     return {"id": membership.id, "laboratory_id": laboratory.id, "technician_id": technician.id}
 
 
+@router.post("/organization-memberships", response_model=schemas.OrganizationMembershipOut)
+def create_organization_membership(
+    payload: schemas.OrganizationPractitionerCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_roles("admin")),
+):
+    organization = db.query(models.User).filter(
+        models.User.email == payload.organization_email,
+        models.User.role == "lab",
+    ).first()
+    practitioner = db.query(models.User).filter(
+        models.User.email == payload.practitioner_email,
+        models.User.role == "doctor",
+    ).first()
+    if organization is None or practitioner is None:
+        raise HTTPException(status_code=404, detail="Organization or physician account not found")
+
+    membership = db.query(models.OrganizationMembership).filter(
+        models.OrganizationMembership.organization_id == organization.id,
+        models.OrganizationMembership.practitioner_id == practitioner.id,
+    ).first()
+    if membership is None:
+        membership = models.OrganizationMembership(
+            organization_id=organization.id,
+            practitioner_id=practitioner.id,
+            created_by=current_user.id,
+        )
+        db.add(membership)
+    elif membership.active:
+        return {
+            "id": membership.id,
+            "organization_id": organization.id,
+            "organization_name": organization.full_name,
+            "practitioner_id": practitioner.id,
+            "practitioner_name": practitioner.full_name,
+            "active": True,
+        }
+    else:
+        membership.active = True
+        membership.created_by = current_user.id
+        membership.created_at = datetime.utcnow()
+    db.commit()
+    db.refresh(membership)
+    audit_logger.log_event(db, current_user.id, "ORGANIZATION_PRACTITIONER_ADDED", {
+        "organization_id": organization.id,
+        "practitioner_id": practitioner.id,
+    })
+    return {
+        "id": membership.id,
+        "organization_id": organization.id,
+        "organization_name": organization.full_name,
+        "practitioner_id": practitioner.id,
+        "practitioner_name": practitioner.full_name,
+        "active": membership.active,
+    }
+
+
+@router.get("/organization-memberships", response_model=list[schemas.OrganizationMembershipOut])
+def list_organization_memberships(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_roles("admin")),
+):
+    organization_user = aliased(models.User)
+    practitioner_user = aliased(models.User)
+    rows = db.query(
+        models.OrganizationMembership,
+        organization_user,
+        practitioner_user,
+    ).join(
+        organization_user,
+        organization_user.id == models.OrganizationMembership.organization_id,
+    ).join(
+        practitioner_user,
+        practitioner_user.id == models.OrganizationMembership.practitioner_id,
+    ).order_by(
+        models.OrganizationMembership.created_at.desc(),
+    ).all()
+    return [{
+        "id": membership.id,
+        "organization_id": organization.id,
+        "organization_name": organization.full_name,
+        "practitioner_id": practitioner.id,
+        "practitioner_name": practitioner.full_name,
+        "active": membership.active,
+    } for membership, organization, practitioner in rows]
+
+
+@router.delete("/organization-memberships/{membership_id}", status_code=204)
+def revoke_organization_membership(
+    membership_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_roles("admin")),
+):
+    membership = db.query(models.OrganizationMembership).filter(
+        models.OrganizationMembership.id == membership_id,
+    ).first()
+    if membership is None:
+        raise HTTPException(status_code=404, detail="Organization membership not found")
+    if membership.active:
+        membership.active = False
+        db.commit()
+        audit_logger.log_event(db, current_user.id, "ORGANIZATION_PRACTITIONER_REMOVED", {
+            "organization_id": membership.organization_id,
+            "practitioner_id": membership.practitioner_id,
+        })
+
+
 def _create_account(db: Session, payload, role: str, issue_token: bool = True):
     existing = db.query(models.User).filter(models.User.email == payload.email).first()
     if existing:
@@ -170,20 +278,29 @@ def _create_account(db: Session, payload, role: str, issue_token: bool = True):
 def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     if os.getenv("AUTH_PROVIDER", "local").lower() == "keycloak":
         raise HTTPException(status_code=409, detail="Sign in through the configured Keycloak client")
-    locked_for = rate_limit.is_locked_out(payload.email)
+    try:
+        locked_for = rate_limit.is_locked_out(db, payload.email)
+    except rate_limit.RateLimitStoreError as error:
+        raise HTTPException(status_code=503, detail="Sign-in is temporarily unavailable") from error
     if locked_for:
         raise HTTPException(
             status_code=429,
             detail=f"Too many failed attempts. Try again in {locked_for:.0f}s.",
-            headers={"Retry-After": str(int(locked_for) + 1)},
+            headers={"Retry-After": str(int(locked_for))},
         )
 
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
-        rate_limit.record_failure(payload.email)
+        try:
+            rate_limit.record_failure(db, payload.email)
+        except rate_limit.RateLimitStoreError as error:
+            raise HTTPException(status_code=503, detail="Sign-in is temporarily unavailable") from error
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    rate_limit.record_success(payload.email)
+    try:
+        rate_limit.record_success(db, payload.email)
+    except rate_limit.RateLimitStoreError as error:
+        raise HTTPException(status_code=503, detail="Sign-in is temporarily unavailable") from error
     audit_logger.log_event(db, user.id, "USER_LOGIN", {"role": user.role})
     token = create_access_token({"sub": user.id, "role": user.role})
     return {"access_token": token, "user": schemas.UserOut.model_validate(user)}

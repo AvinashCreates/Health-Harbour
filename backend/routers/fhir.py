@@ -12,6 +12,7 @@ import schemas
 from database import get_db
 from deps import get_current_user, require_roles
 from services import audit_logger, fhir_builder
+from services.consent_access import consented_patient_ids, has_active_consent
 from services.fhir_server import (
     authoritative_resource,
     persist_resource,
@@ -33,24 +34,11 @@ WORKFLOW_STATES = (
 
 
 def _has_active_consent(db: Session, patient_id: str, grantee_id: str, resource_type: str) -> bool:
-    now = datetime.utcnow()
-    consents = db.query(models.Consent).filter(
-        models.Consent.patient_id == patient_id,
-        models.Consent.grantee_id == grantee_id,
-        models.Consent.revoked_at.is_(None),
-        models.Consent.expires_at > now,
-    ).all()
-    return any(resource_type in consent.resource_types for consent in consents)
+    return has_active_consent(db, patient_id, grantee_id, resource_type)
 
 
 def _consented_patient_ids(db: Session, grantee_id: str, resource_type: str) -> list[str]:
-    now = datetime.utcnow()
-    rows = db.query(models.Consent).filter(
-        models.Consent.grantee_id == grantee_id,
-        models.Consent.revoked_at.is_(None),
-        models.Consent.expires_at > now,
-    ).all()
-    return [consent.patient_id for consent in rows if resource_type in consent.resource_types]
+    return consented_patient_ids(db, grantee_id, resource_type)
 
 
 def _get_workflow(db: Session, service_request_id: str) -> models.LaboratoryWorkflow:
@@ -185,14 +173,34 @@ def list_accessible_patients(
     current_user: models.User = Depends(require_roles("doctor")),
 ):
     now = datetime.utcnow()
+    patient_ids = _consented_patient_ids(db, current_user.id, "Patient")
+    if not patient_ids:
+        return []
+    active_organizations = {
+        row.organization_id: row.created_at
+        for row in db.query(
+            models.OrganizationMembership.organization_id,
+            models.OrganizationMembership.created_at,
+        ).filter(
+            models.OrganizationMembership.practitioner_id == current_user.id,
+            models.OrganizationMembership.active.is_(True),
+        ).all()
+    }
     consents = db.query(models.Consent).filter(
         models.Consent.grantee_id == current_user.id,
+        models.Consent.patient_id.in_(patient_ids),
         models.Consent.revoked_at.is_(None),
         models.Consent.expires_at > now,
+        models.Consent.purpose == "TREATMENT",
     ).all()
-    patient_ids = sorted({
-        consent.patient_id for consent in consents if "Patient" in consent.resource_types
-    })
+    consents = [
+        consent for consent in consents
+        if consent.organization_id is None
+        or (
+            consent.organization_id in active_organizations
+            and active_organizations[consent.organization_id] <= consent.granted_at
+        )
+    ]
     patients = db.query(models.User).filter(models.User.id.in_(patient_ids)).all() if patient_ids else []
     result = []
     for patient in patients:

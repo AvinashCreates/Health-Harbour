@@ -6,9 +6,18 @@ import httpx
 
 
 class FHIRIntegrationError(RuntimeError):
-    def __init__(self, message: str, status_code: int = 503):
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 503,
+        *,
+        operation: str | None = None,
+        upstream_status_code: int | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
+        self.operation = operation
+        self.upstream_status_code = upstream_status_code
 
 
 def fhir_mode() -> str:
@@ -57,7 +66,12 @@ def _raise_for_fhir_error(response: httpx.Response, action: str) -> None:
         else 422 if response.status_code in (400, 422)
         else 503
     )
-    raise FHIRIntegrationError(f"HAPI FHIR {action} failed: {details}", status_code=status_code)
+    raise FHIRIntegrationError(
+        f"HAPI FHIR {action} failed: {details}",
+        status_code=status_code,
+        operation=action,
+        upstream_status_code=response.status_code,
+    )
 
 
 def check_r4_server() -> dict[str, Any]:
