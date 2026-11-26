@@ -39,7 +39,7 @@ proof of exploitation in a deployed environment.
   behavior.
 - **Status:** Fixed in source; focused tests pass.
 
-### MEDIUM — Login rate limiting is process-local — remediated in source
+### MEDIUM — Login rate limiting was process-local — remediated in source
 
 - **Evidence:** `backend/rate_limit.py` now stores HMAC-hashed account keys and
   lockout state in the database with atomic PostgreSQL/SQLite upserts.
@@ -91,8 +91,9 @@ proof of exploitation in a deployed environment.
 - Bearer-token authentication does not use ambient browser cookies, so no
   cookie-based CSRF path was confirmed in the reviewed flows.
 - Individual file downloads, workflow transitions, and direct consent checks
-  enforce backend authorization; the file-listing inconsistency above remains
-  an exception.
+  enforce backend authorization. Physician file and patient listings now use
+  the same shared consent predicate, with membership-removal and
+  post-grant-membership regression tests.
 
 ## Verification and next actions
 
@@ -101,3 +102,52 @@ authorization suite. Live PostgreSQL migration, production deployment review,
 and a ZAP scan remain outstanding; source tests do not establish live
 configuration safety. See [TESTING_REPORT.md](./TESTING_REPORT.md) for what
 was and was not executed.
+
+## Verification update (2026-11-26)
+
+The 50-test isolated backend suite, API workflow checks, and adversarial API
+checks passed. The PostgreSQL migration chain and audit concurrency regression
+also passed against a disposable PostgreSQL 16.11 cluster, including a server
+default of `REPEATABLE READ`; no migration or write was made to the existing
+project database. Read-only API health and HAPI metadata requests succeeded.
+Keycloak discovery timed out, and no ZAP scan or live production configuration
+review was performed. These results do not change the live-deployment risks
+above or establish production readiness.
+
+## Milestone 2 registry controls (2026-11-26)
+
+- Added database-backed organization approval, provider verification,
+  organization-scoped admin assignments, and independent affiliation
+  lifecycles. Existing `doctor` or `lab` roles alone do not satisfy the new
+  eligibility checks.
+- New and legacy clinical authorization checks read current profile,
+  organization, and affiliation state from the database, so suspension or
+  termination takes effect without waiting for a JWT refresh.
+- Cross-organization affiliation management is constrained by
+  `require_organization_admin`; the provider-candidate endpoint is scoped to
+  an approved organization that the caller administers. Platform affiliation
+  oversight is admin-only and paginated.
+- Directory outputs include only approved organizations and verified
+  providers with eligible active affiliations. Verification evidence
+  references are excluded from public directory responses.
+- Added negative tests for non-admin decisions, cross-tenant access,
+  unverified activation, evidence privacy, and organization/provider
+  suspension. Rejected organization applications now reuse their existing
+  organization profile on resubmission; duplicate registration checks remain
+  enforced.
+- Provider approval history persists the allowed `VERIFIED` decision value,
+  and provider suspension changes the actual provider status. Both defects
+  were caught and corrected by the new registry regression tests.
+
+### Remaining registry trust limitations
+
+- Provider credentials and organization registration are reviewed manually.
+  Evidence references are opaque identifiers only; the application does not
+  store or independently retrieve evidence and does not integrate with an
+  official registry. Do not treat submission or approval in this prototype as
+  official credential verification.
+- The new registry migration has passed SQLite checks only in this worktree.
+  Disposable PostgreSQL migration verification and frontend/browser
+  acceptance remain outstanding; no live deployment was tested.
+- No migration or write was made to the existing project PostgreSQL database,
+  and historical audit entry #33 was not changed.

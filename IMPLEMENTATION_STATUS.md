@@ -3,6 +3,55 @@
 This file records verified repository behavior separately from external
 deployment claims. Use synthetic data only.
 
+## Latest verification update (2026-11-26)
+
+- The latest complete backend run passed 57 tests, with one PostgreSQL-only
+  test skipped. The legacy API and security smoke scripts also passed against
+  separate synthetic SQLite databases.
+- The full SQLite migration chain through registry revision
+  `2a7f9c6d4e81` passed, and `alembic check` reported no schema drift.
+- The registry frontend was added after the previously successful frontend
+  build. This environment has no Node.js/npm, so that updated build and browser
+  acceptance remain unverified.
+- Earlier in the work, both Fabric Go modules passed tests and vet; those
+  commands were not rerun in this implementation pass.
+- Disposable PostgreSQL audit concurrency tests passed earlier under
+  `REPEATABLE READ` and `READ COMMITTED` server defaults. The registry
+  migration was not tested on PostgreSQL in this pass.
+- The existing project PostgreSQL database and historical audit entry #33
+  were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
+  commands and evidence.
+
+## Milestone 2 registry implementation
+
+- Added organization/provider application and verification records,
+  organization-scoped role assignments, independent provider affiliations,
+  and status-history records through additive Alembic revision
+  `2a7f9c6d4e81`.
+- Added authenticated `/api/v1` application, directory, provider profile,
+  affiliation, organization administration, platform review, and
+  administrator affiliation-oversight endpoints. Admin lists and directories
+  are paginated; private evidence references are not returned by public
+  directory responses.
+- Added the React Registry workspace for applicants, providers, organization
+  administrators, platform reviewers, and patients browsing approved
+  organizations/eligible providers. The workspace uses backend APIs; it does
+  not use hardcoded directory data.
+- Tightened provider/organization eligibility checks to use current database
+  status and affiliation records. Legacy clinical workflow tests now seed
+  synthetic verified providers and approved organizations rather than
+  weakening those checks.
+- Rejected organization applications can be resubmitted against the same
+  organization profile. Organization administrators can discover verified
+  providers eligible for invitation without guessing provider identifiers.
+- Verified with seven registry API tests, including tenant isolation,
+  private evidence separation, suspension, affiliation independence,
+  administrator oversight, and rejected-application resubmission.
+- The registry migration has been tested on isolated SQLite only. No
+  production-ready status, official credential verification, live FHIR
+  linkage, Keycloak browser authentication, or deployed PostgreSQL migration
+  is claimed.
+
 ## Implemented
 
 - FastAPI authentication with local JWT and Keycloak/OIDC validation paths,
@@ -85,11 +134,12 @@ deployment claims. Use synthetic data only.
 
 ### Not run or not verified
 
-- `npm run build` could not run because npm is unavailable in the current
-  environment.
+- Live Keycloak browser authentication, HAPI organization Consent
+  `$validate`/persistence, and Fabric network commits remain unverified.
 - PostgreSQL migrations and HAPI organization Consent `$validate`/persistence
-  were not run against live services. Never apply the new migration to the
-  user's database without a verified backup and isolated restore test.
+  were not run against the existing project database. Never apply the new
+  migration to that database without a verified backup and isolated restore
+  test.
 - Live Keycloak, Fabric, ZAP, k6, backup/restore, and deployment recovery tests
   remain outstanding.
 
@@ -103,8 +153,8 @@ deployment claims. Use synthetic data only.
 
 ## Environment limitations
 
-- Docker, Node.js/npm, Go, and k6 are unavailable in the current verification
-  environment.
+- Docker Compose and k6 were unavailable. Node.js/npm, Go, and PostgreSQL
+  were supplied through temporary installations for the checks above.
 - The supplied browser page showed an already-rendered Administrator view but
   repeated Vite WebSocket `ERR_CONNECTION_REFUSED` events, so frontend hot
   reload and full browser acceptance are not verified.
@@ -115,9 +165,10 @@ deployment claims. Use synthetic data only.
 
 ## Next implementation stage
 
-Apply the new migration to a backed-up disposable or deployment database, then
-validate organization Consent create/read/revoke against the configured HAPI
-FHIR R4 service. Continue with complete live FHIR workflow verification before
-claiming interoperability.
+Complete the Milestone 2 verification gate by building the updated frontend
+with Node.js/npm, running browser acceptance against an isolated backend, and
+testing revision `2a7f9c6d4e81` on a separately provisioned disposable
+PostgreSQL database. Continue only after these checks pass. Never use the
+existing project PostgreSQL database for this verification.
 
 Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged.

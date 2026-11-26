@@ -7,6 +7,7 @@ import SharingAccess from './pages/SharingAccess'
 import DoctorDashboard from './pages/DoctorDashboard'
 import LabDashboard from './pages/LabDashboard'
 import AdminDashboard from './pages/AdminDashboard'
+import RegistryWorkspace from './pages/RegistryWorkspace'
 import { keycloak, keycloakEnabled } from './keycloak'
 import LoadingSkeleton from './components/LoadingSkeleton'
 
@@ -33,6 +34,7 @@ const SECTION_DESCRIPTIONS = {
   sharing: 'Choose who can access selected records and for how long.',
   work: 'Move requests through the appropriate care or laboratory steps.',
   admin: 'Manage service accounts and review audit integrity.',
+  registry: 'Explore verified care organizations and manage professional affiliations.',
 }
 
 export default function App() {
@@ -128,6 +130,7 @@ export default function App() {
     ...(user.role === 'patient' ? [{ id: 'sharing', label: 'Sharing & access' }] : []),
     ...(user.role === 'doctor' || isLab ? [{ id: 'work', label: isLab ? 'Lab workflow' : 'Care workflow' }] : []),
     ...(isAdmin ? [{ id: 'admin', label: 'Admin tools' }] : []),
+    { id: 'registry', label: isAdmin ? 'Registry review' : 'Care network' },
   ]
   const activeSection = navItems.some((item) => item.id === section) ? section : 'overview'
 
@@ -163,6 +166,7 @@ export default function App() {
           {activeSection === 'sharing' && <SharingAccess token={token} />}
           {activeSection === 'work' && (user.role === 'doctor' ? <DoctorDashboard token={token} /> : isLab ? <LabDashboard token={token} user={user} /> : null)}
           {activeSection === 'admin' && isAdmin && <AdminDashboard token={token} />}
+          {activeSection === 'registry' && <RegistryWorkspace token={token} user={user} />}
         </div>
       </main>
       <footer className="site-footer">HealthHarbor <span>·</span> Secure healthcare exchange prototype</footer>

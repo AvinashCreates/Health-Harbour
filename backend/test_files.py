@@ -39,6 +39,34 @@ class ClinicalFileApiTests(unittest.TestCase):
         self.other_lab = self._user("Other Laboratory", "lab", "other-lab@example.test")
         self.technician = self._user("Assigned Technician", "lab_technician", "tech@example.test")
         self.admin = self._user("File Administrator", "admin", "admin@example.test")
+        registry_organization = models.HealthcareOrganization(
+            legal_name="Synthetic Registry Organization",
+            display_name="Synthetic Registry Organization",
+            organization_type="HOSPITAL",
+            administrative_contact_name="Synthetic Administrator",
+            administrative_contact_email="registry@example.test",
+            status="APPROVED",
+        )
+        self.db.add(registry_organization)
+        provider = models.HealthcareProvider(
+            account_id=self.doctor.id,
+            professional_name=self.doctor.full_name,
+            registration_authority="synthetic-test-authority",
+            registration_number=f"TEST-{self.doctor.id}",
+            qualifications=["Synthetic test qualification"],
+            status="VERIFIED",
+        )
+        self.db.add(provider)
+        self.db.flush()
+        self.db.add(models.OrganizationAffiliation(
+            organization_id=registry_organization.id,
+            provider_id=provider.id,
+            account_id=self.doctor.id,
+            organization_role="PROVIDER",
+            status="ACTIVE",
+            invited_by_id=self.admin.id,
+            effective_from=datetime.utcnow(),
+        ))
         request = models.FHIRResource(
             resource_type="ServiceRequest",
             fhir_id="service-request-1",

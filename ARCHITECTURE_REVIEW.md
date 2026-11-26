@@ -1,5 +1,20 @@
 # Architecture review
 
+## Latest verification note (2026-11-26)
+
+The Milestone 2 registry backend and React workflows are implemented. The
+latest backend suite passed 57 tests with one PostgreSQL-only test skipped,
+and SQLite migration/schema checks passed through `2a7f9c6d4e81`. The new
+frontend build could not be run because Node.js/npm were unavailable. The
+registry migration was not tested on PostgreSQL in this pass. Earlier
+disposable PostgreSQL audit concurrency checks remain recorded in
+[TESTING_REPORT.md](./TESTING_REPORT.md). The existing project PostgreSQL
+database was not accessed or modified.
+
+Live Keycloak flows, HAPI resource workflows, Fabric commits, ZAP, k6,
+browser acceptance, and backup/restore remain unverified. This is not a
+production-readiness claim.
+
 ## Repository and runtime layout
 
 The active Git branch at review time is `main`. Existing uncommitted changes
@@ -45,6 +60,11 @@ preserved and not normalized or reverted.
    not in PostgreSQL or Fabric. The database stores metadata and a digest.
 7. `services/audit_logger.py` maintains the application hash chain. It is
    separate from the Fabric ledger and does not repair historical records.
+8. The healthcare registry uses independent `HealthcareOrganization`,
+   `HealthcareProvider`, application, review-history, organization-role, and
+   affiliation tables. `backend/routers/registry.py` exposes the `/api/v1`
+   workflows; mutable verification and affiliation status is checked from
+   PostgreSQL/SQLite-backed application state, not trusted JWT claims.
 
 ## Identity and authorization
 
@@ -59,6 +79,10 @@ preserved and not normalized or reverted.
   access.
 - The database remains the authorization index; live HAPI or Fabric
   availability does not replace API-side checks.
+- Provider eligibility requires a currently VERIFIED profile and at least one
+  active affiliation to an APPROVED organization. Each organization
+  affiliation is managed independently, and organization administrators are
+  scoped by a database role assignment.
 
 ## Persistence and startup
 
@@ -68,15 +92,16 @@ preserved and not normalized or reverted.
   PostgreSQL before dependent services start.
 - PostgreSQL auto-schema creation is disabled for the backend. SQLite local
   tests can use the development auto-create path.
-- The organization-consent migration has been tested on fresh SQLite. Its
-  application to the existing PostgreSQL database has not been performed in
-  this environment.
+- The registry migration is additive and has passed a fresh SQLite upgrade
+  and `alembic check`. It has not been run on the existing project database or
+  on PostgreSQL in this implementation pass.
 
 ## Verification snapshot and limitations
 
-- The current implementation pass passed 34 focused backend unit tests, both
-  isolated API/security smoke suites, and a fresh SQLite migration plus
-  `alembic check`.
+- An earlier implementation snapshot passed 34 focused backend unit tests,
+  both isolated API/security smoke suites, and a fresh SQLite migration plus
+  `alembic check`; see the latest verification note above for subsequent
+  results.
 - User-provided runtime evidence previously verified PostgreSQL connectivity,
   HAPI R4 metadata/readiness, and local API login. No live HAPI workflow,
   Keycloak browser flow, or Fabric ledger commit is established by those
@@ -84,7 +109,8 @@ preserved and not normalized or reverted.
 - The supplied browser tab reported repeated Vite WebSocket
   `ERR_CONNECTION_REFUSED` events. The frontend server was not restarted by
   this review.
-- Docker, Node/npm, Go, and k6 are unavailable in the current environment.
+- Docker Compose and k6 were unavailable in that earlier snapshot. Temporary
+  Node.js/npm and Go toolchains were used for the latest build and module tests.
 - The user-reported PostgreSQL audit history has a genuine break beginning at
   #33. Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged.
 

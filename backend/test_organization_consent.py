@@ -39,6 +39,34 @@ class OrganizationConsentTests(unittest.TestCase):
         self.organization = self._user(db, "Organization", "lab", "organization@example.com")
         self.other_organization = self._user(db, "Other Organization", "lab", "other@example.com")
         self.admin = self._user(db, "Administrator", "admin", "admin@example.com")
+        registry_organization = models.HealthcareOrganization(
+            legal_name="Synthetic Registry Organization",
+            display_name="Synthetic Registry Organization",
+            organization_type="HOSPITAL",
+            administrative_contact_name="Synthetic Administrator",
+            administrative_contact_email="registry@example.com",
+            status="APPROVED",
+        )
+        db.add(registry_organization)
+        provider = models.HealthcareProvider(
+            account_id=self.doctor.id,
+            professional_name=self.doctor.full_name,
+            registration_authority="synthetic-test-authority",
+            registration_number=f"TEST-{self.doctor.id}",
+            qualifications=["Synthetic test qualification"],
+            status="VERIFIED",
+        )
+        db.add(provider)
+        db.flush()
+        db.add(models.OrganizationAffiliation(
+            organization_id=registry_organization.id,
+            provider_id=provider.id,
+            account_id=self.doctor.id,
+            organization_role="PROVIDER",
+            status="ACTIVE",
+            invited_by_id=self.admin.id,
+            effective_from=datetime.utcnow(),
+        ))
         db.add(models.FHIRResource(
             resource_type="Patient",
             fhir_id=self.patient.fhir_resource_id,

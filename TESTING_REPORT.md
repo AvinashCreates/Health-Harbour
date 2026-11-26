@@ -1,57 +1,166 @@
 # Testing report
 
-## Environment
+## Latest Milestone 2 verification (2026-11-26)
 
-- Python 3.13.15 in the current environment.
-- Backend dependencies installed into a temporary virtual environment; no
-  dependency manifest changes.
-- Docker, Node.js/npm, Go, and k6 unavailable in the current environment.
-- Python/API tests used isolated SQLite databases and synthetic accounts.
-- No PostgreSQL or Docker volume was modified.
+This update supersedes earlier test-count summaries for the current worktree.
 
-## Passed in the current implementation pass
+- `python -m unittest discover -v` passed **57 tests**, with one PostgreSQL-
+  only test skipped. It ran with `AUTH_PROVIDER=local`, `FHIR_MODE=local`,
+  `FABRIC_ENABLED=false`, and a fresh migrated SQLite database at
+  `/tmp/hh-milestone2-full-final.db`.
+- `test_api.py` and `test_security.py` each passed as separate smoke runs
+  against their own migrated disposable SQLite databases.
+- The seven registry API tests passed, including authorization denials,
+  organization resubmission, provider-candidate scoping, evidence privacy,
+  suspension, and multi-organization affiliation behavior.
+- `alembic upgrade head` and `alembic check` passed on a fresh isolated
+  SQLite database through `2a7f9c6d4e81_healthcare_registry`.
+- The existing project PostgreSQL database was not connected to or modified.
+  The registry migration was not run on PostgreSQL in this pass.
+- `npm run build` was attempted but could not start because this environment
+  has neither Node.js nor npm installed. Earlier build evidence predates the
+  new Registry workspace and does not validate it. No frontend browser
+  acceptance was performed.
+- Earlier disposable PostgreSQL audit concurrency tests still provide
+  evidence for the READ COMMITTED audit fix; they were not rerun here.
 
-| Check | Result | Scope and limitation |
-|---|---|---|
-| `python -m unittest test_organization_consent test_integrations test_files test_audit_logger` | 34 tests passed | Isolated/unit tests; external service behavior is mocked where relevant. |
-| `test_security.py` | Passed | Isolated API checks for tokens, roles, privilege attempts, SQL-injection-style input, and login throttling. |
-| `test_security_hardening.py`, `test_files.py`, `test_organization_consent`, `test_integrations`, `test_audit_logger` | 46 tests passed | Isolated SQLite; covers explicit seeding credentials, production seed behavior, shared/concurrent rate limiting and fail-closed storage, generic FHIR API errors, membership-aware file listings, and adjacent backend regressions. |
-| `test_api.py` | Passed | Isolated local-mode API workflow, including consent, lab transitions, and audit tamper detection. |
-| Full Alembic chain through `8c41d6a2f705` | Passed | Fresh temporary SQLite database; no changes to PostgreSQL. |
-| `alembic check` | Passed | No schema drift after the full migration chain on SQLite. |
-| Existing consent migration compatibility | Passed | Synthetic consent survived SQLite upgrade, downgrade, and re-upgrade; organization defaults were populated. |
-| Workspace diagnostics for modified Python and React files | No errors reported | Editor/compiler diagnostics only; not a frontend production build. |
-| `git diff --check` on feature files | Passed | Whitespace validation for the implementation edits. |
+## Verification environment and safety
 
-## Not run / not verified
+- Backend tests ran under Python 3.13.15 in a temporary virtual environment.
+- Frontend dependencies were installed from the existing lockfile with
+  temporary Node.js 22.20.0/npm; no package manifest or lockfile changes were
+  made. Vite 6.4.6 produced a successful production build.
+- Go 1.23.12 was installed under a temporary path. PostgreSQL 16.11 was
+  source-built and run as a disposable loopback-only cluster.
+- The existing project PostgreSQL database was not accessed for migrations or
+  writes. PostgreSQL tests used only databases named `audit_test_*`; SQLite
+  tests used separate temporary files and synthetic accounts.
+- Initial Go/PostgreSQL compilation attempts exhausted the constrained `/tmp`
+  filesystem. Re-running with temporary build directories on the home
+  filesystem succeeded. No repository source changes were needed for this.
 
-- `npm run build`: npm is not installed here.
-- Browser acceptance/hot reload: the supplied shared page showed rendered
-  Administrator content but repeated Vite WebSocket `ERR_CONNECTION_REFUSED`;
-  frontend server was not started or restarted by this test run.
-- PostgreSQL migration: intentionally not applied to the user's database;
-  verified backup and isolated PostgreSQL restore are prerequisites.
-- HAPI Consent/DocumentReference/workflow live CRUD and `$validate`: not run.
-- Keycloak browser PKCE login, refresh, logout, and live role provisioning:
-  not run in this pass.
-- Fabric Go tests, network deployment, commit transaction verification, and
-  retry/outage tests: Go and Docker unavailable.
-- OWASP ZAP: not run; Docker and a live local target were unavailable.
-- The four source-review findings have been remediated in source; see
-  [SECURITY_ASSESSMENT.md](./SECURITY_ASSESSMENT.md) for residual deployment
-  actions and limitations. No live ZAP results are claimed.
-- k6 workload and performance metrics: not run; k6 and a live target were
-  unavailable. No throughput/latency figures are claimed.
-- PostgreSQL backup/restore and clinical-file volume restore: not run.
+## Backend test results
 
-## Historical audit evidence
+From `backend/`, the focused suite ran:
 
-The user's PostgreSQL inspector previously reported 113 rows and a genuine
-chain-link discontinuity starting at audit entry #33. The implementation and
-tests did not edit historical audit rows. Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged.
+```sh
+DATABASE_URL=sqlite:////tmp/hh-prompt-final-unit-suite.db \
+DB_AUTO_CREATE=1 \
+python -m unittest test_security_hardening test_files \
+  test_organization_consent test_integrations test_audit_logger \
+  test_loadtest -v
+```
 
-## Reproduction
+**Result: 50 tests passed, 1 PostgreSQL-only test skipped.** The skip was
+intentional because this command used SQLite; the PostgreSQL test was then run
+explicitly against disposable databases. Coverage includes seed safeguards,
+shared login rate limiting, consent and membership authorization, protected
+files, generic FHIR errors, token validation, the hash chain, and load-runner
+target validation.
 
-See [run.md](./run.md) for isolated API, security, migration, and backend test
-commands. See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for the non-destructive
-backup and isolated restore procedure.
+The isolated API workflow passed:
+
+```sh
+DATABASE_URL=sqlite:////tmp/hh-prompt-final-api.db DB_AUTO_CREATE=1 \
+AUTH_PROVIDER=local FHIR_MODE=local FABRIC_ENABLED=false \
+python test_api.py
+```
+
+It covered registration, consent, ServiceRequest idempotency, laboratory and
+technician transitions, reports, revocation, and audit tamper detection.
+
+The isolated security workflow passed:
+
+```sh
+DATABASE_URL=sqlite:////tmp/hh-prompt-final-security.db DB_AUTO_CREATE=1 \
+AUTH_PROVIDER=local FHIR_MODE=local FABRIC_ENABLED=false \
+python test_security.py
+```
+
+It covered missing, malformed, expired, and tampered tokens; role-denied
+operations; unsafe input; security headers; and account lockout.
+
+## Migration and PostgreSQL audit concurrency
+
+The full Alembic chain and schema comparison passed on a fresh SQLite database:
+
+```sh
+DATABASE_URL=sqlite:////tmp/hh-prompt-final-migration.db DB_AUTO_CREATE=0 \
+alembic upgrade head
+DATABASE_URL=sqlite:////tmp/hh-prompt-final-migration.db DB_AUTO_CREATE=0 \
+alembic check
+```
+
+On the disposable PostgreSQL 16.11 cluster, `alembic upgrade head` ran through
+`8c41d6a2f705` and `alembic check` reported **No new upgrade operations
+detected**:
+
+```sh
+DATABASE_URL=postgresql://postgres@127.0.0.1:55439/audit_test_prompt \
+alembic upgrade head
+DATABASE_URL=postgresql://postgres@127.0.0.1:55439/audit_test_prompt \
+alembic check
+```
+
+The server's `default_transaction_isolation` was `repeatable read`.
+The guarded test passed through the application engine/session configuration:
+
+```sh
+AUDIT_TEST_POSTGRES=1 \
+AUDIT_TEST_SERVER_DEFAULT='repeatable read' \
+DATABASE_URL=postgresql://postgres@127.0.0.1:55439/audit_test_concurrency \
+python -m unittest \
+  test_audit_logger.AuditLoggerConcurrencyTests.test_postgresql_repeatable_read_server_default_serializes_appends \
+  -v
+```
+
+The same test passed on a separate disposable database with its effective
+default set to `read committed`, using
+`AUDIT_TEST_SERVER_DEFAULT='read committed'` and
+`DATABASE_URL=postgresql://postgres@127.0.0.1:55439/audit_test_readcommitted`.
+Both runs used independent writer processes and sessions. They verified that
+the application transaction uses `READ COMMITTED` after an earlier query,
+advisory-lock serialization, sequential predecessor links, recomputed hashes,
+appending after a synthetic discontinuity without changing it, and rollback
+with no partial insert after a forced failure.
+
+This verifies the implementation on isolated synthetic PostgreSQL data only;
+it does not validate or repair the existing project database. Its known
+historical discontinuity at entry #33 remains untouched.
+
+## Frontend and Fabric module results
+
+```sh
+cd frontend
+npm ci
+npm run build
+```
+
+`npm ci` completed from the lockfile with zero reported vulnerabilities.
+`npm run build` passed: Vite 6.4.6 transformed 42 modules and emitted the
+production bundle.
+
+From the project root, both Fabric modules passed tests and vet:
+
+```sh
+(cd fabric/chaincode && go test ./... && go vet ./...)
+(cd fabric/adapter && go test ./... && go vet ./...)
+```
+
+These are module tests only; they do not prove a live Fabric deployment or a
+committed ledger transaction.
+
+## Read-only service probes and unverified behavior
+
+- Backend `GET /health`: HTTP 200, status healthy, database connected, FHIR
+  mode `hapi`.
+- HAPI `GET /fhir/metadata`: HTTP 200, `CapabilityStatement`, FHIR R4 `4.0.1`.
+- Keycloak OIDC discovery timed out.
+- No HAPI clinical resource writes, live Keycloak browser flow, Fabric
+  transaction, browser acceptance run, ZAP scan, k6 workload, backup, or
+  restore was performed.
+- Docker Compose tooling was unavailable, so no containers or project volumes
+  were started, stopped, or changed.
+- Test logs included Python 3.13 `datetime.utcnow()` deprecation warnings;
+  they did not fail the test runs.
+- `git diff --check` passed. No changes were committed.

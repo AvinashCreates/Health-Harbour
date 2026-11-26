@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -136,3 +136,183 @@ class ConsentOut(BaseModel):
     expires_at: datetime
     revoked_at: Optional[datetime] = None
     is_active: bool
+
+
+OrganizationType = Literal["HOSPITAL", "CLINIC", "DIAGNOSTIC_LABORATORY", "OTHER"]
+OrganizationStatus = Literal["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED", "SUSPENDED"]
+ProviderStatus = Literal["PENDING", "UNDER_REVIEW", "VERIFIED", "REJECTED", "SUSPENDED"]
+
+
+class OrganizationApplicationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    legal_name: str = Field(min_length=2, max_length=200, strip_whitespace=True)
+    display_name: str = Field(min_length=2, max_length=160, strip_whitespace=True)
+    organization_type: OrganizationType
+    registration_authority: str | None = Field(default=None, max_length=160, strip_whitespace=True)
+    registration_identifier: str | None = Field(default=None, max_length=160, strip_whitespace=True)
+    address: Dict[str, str] = Field(default_factory=dict, max_length=12)
+    contact_email: EmailStr | None = None
+    contact_phone: str | None = Field(default=None, max_length=40, strip_whitespace=True)
+    administrative_contact_name: str = Field(min_length=2, max_length=120, strip_whitespace=True)
+    administrative_contact_email: EmailStr
+    evidence_references: List[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("evidence_references")
+    @classmethod
+    def evidence_references_are_opaque(cls, values: list[str]) -> list[str]:
+        for value in values:
+            if not value or len(value) > 160 or "://" in value or value.startswith("/"):
+                raise ValueError("Evidence references must be opaque identifiers, not URLs or paths")
+        return values
+
+
+class OrganizationApplicationOut(BaseModel):
+    id: str
+    organization_id: str
+    legal_name: str
+    display_name: str
+    organization_type: str
+    registration_authority: str | None
+    registration_identifier: str | None
+    address: Dict[str, str]
+    contact_email: str | None
+    contact_phone: str | None
+    administrative_contact_name: str
+    administrative_contact_email: str
+    status: str
+    submitted_at: datetime
+    reviewed_at: datetime | None
+    decision_reason: str | None
+    evidence_references: List[str]
+
+
+class OrganizationDirectoryOut(BaseModel):
+    id: str
+    legal_name: str
+    display_name: str
+    organization_type: str
+    registration_authority: str | None
+    registration_identifier: str | None
+    address: Dict[str, str]
+    contact_email: str | None
+
+
+class RegistryDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["UNDER_REVIEW", "APPROVED", "REJECTED", "SUSPENDED", "REINSTATED"]
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class ProviderApplicationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    professional_name: str = Field(min_length=2, max_length=160, strip_whitespace=True)
+    registration_authority: str = Field(min_length=2, max_length=160, strip_whitespace=True)
+    registration_number: str = Field(min_length=2, max_length=120, strip_whitespace=True)
+    qualifications: List[str] = Field(min_length=1, max_length=12)
+    specialization: str | None = Field(default=None, max_length=120, strip_whitespace=True)
+    public_profile: str | None = Field(default=None, max_length=1000, strip_whitespace=True)
+    public_contact_email: EmailStr | None = None
+    evidence_references: List[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("qualifications")
+    @classmethod
+    def validate_qualifications(cls, values: list[str]) -> list[str]:
+        if any(not value.strip() or len(value) > 120 for value in values):
+            raise ValueError("Qualifications must be between 1 and 120 characters")
+        return [value.strip() for value in values]
+
+    @field_validator("evidence_references")
+    @classmethod
+    def evidence_references_are_opaque(cls, values: list[str]) -> list[str]:
+        for value in values:
+            if not value or len(value) > 160 or "://" in value or value.startswith("/"):
+                raise ValueError("Evidence references must be opaque identifiers, not URLs or paths")
+        return values
+
+
+class ProviderApplicationOut(BaseModel):
+    id: str
+    provider_id: str
+    professional_name: str
+    registration_authority: str | None
+    registration_number: str | None
+    qualifications: List[str]
+    specialization: str | None
+    status: str
+    submitted_at: datetime
+    reviewed_at: datetime | None
+    decision_reason: str | None
+    evidence_references: List[str] | None = None
+
+
+class ProviderDirectoryOut(BaseModel):
+    id: str
+    professional_name: str
+    qualifications: List[str]
+    specialization: str | None
+    public_profile: str | None
+    public_contact_email: str | None
+    registration_authority: str
+    registration_number: str
+    organizations: List[OrganizationDirectoryOut]
+
+
+class AffiliationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider_id: str = Field(min_length=1, max_length=64)
+    organization_role: Literal["PROVIDER"] = "PROVIDER"
+    invitation_message: str | None = Field(default=None, max_length=500)
+
+
+class AffiliationDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["APPROVED", "REJECTED", "SUSPENDED", "ENDED"]
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class AffiliationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["ACCEPTED", "REJECTED"]
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class AffiliationOut(BaseModel):
+    id: str
+    organization_id: str
+    organization_name: str
+    provider_id: str
+    professional_name: str
+    organization_role: str
+    status: str
+    invited_at: datetime
+    accepted_at: datetime | None
+    effective_from: datetime | None
+    effective_until: datetime | None
+    decided_at: datetime | None
+    decision_reason: str | None
+
+
+class ProviderProfileOut(BaseModel):
+    id: str
+    account_id: str
+    professional_name: str
+    registration_authority: str | None
+    registration_number: str | None
+    qualifications: List[str]
+    specialization: str | None
+    public_profile: str | None
+    public_contact_email: str | None
+    status: str
+    fhir_resource_id: str | None
+    submitted_at: datetime | None
+    decision_reason: str | None
+
+
+class RegistryHistoryOut(BaseModel):
+    id: str
+    decision: str
+    reason: str
+    reviewer_id: str
+    created_at: datetime
+    method: str | None = None
+    source: str | None = None

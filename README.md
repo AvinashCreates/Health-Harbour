@@ -14,8 +14,10 @@ See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for current
 phase-level verification, [ARCHITECTURE_REVIEW.md](./ARCHITECTURE_REVIEW.md)
 for the system boundaries, [COMPLETION_ROADMAP.md](./COMPLETION_ROADMAP.md)
 for remaining acceptance work, [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
-for safe startup and recovery commands, and [TESTING_REPORT.md](./TESTING_REPORT.md)
-for actual test evidence and limitations. The source-level review is in
+for safe startup and recovery commands, [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md)
+for an isolated synthetic-data walkthrough, and
+[TESTING_REPORT.md](./TESTING_REPORT.md) for actual test evidence and
+limitations. The source-level review is in
 [SECURITY_ASSESSMENT.md](./SECURITY_ASSESSMENT.md); it is not a substitute for
 a live ZAP scan.
 
@@ -62,6 +64,13 @@ Re-running the seed script does not reset passwords for accounts that already
 exist. Rotate or disable legacy demo users explicitly before using a database
 outside local development.
 
+After upgrading an existing database, legacy physician and laboratory
+accounts are mapped to **pending** registry profiles. They are intentionally
+not exchange-eligible until a platform administrator verifies the provider or
+approves the organization, and the provider has an active organization
+affiliation. Complete those steps in **Care network** before following the
+clinical workflow with legacy accounts.
+
 Public local registration creates patient accounts only. Staff accounts must
 be provisioned by an authenticated administrator. An administrator associates
 technicians with labs using `POST /auth/laboratory-memberships`. For
@@ -101,6 +110,28 @@ at a hidden prompt, and pass those three variables only to
 The backend rejects invalid transitions, unauthorized labs, technicians not
 assigned to the lab, and technicians not assigned to a specific request.
 Patient consent checks run server-side on protected reads and writes.
+
+## Verified organization and provider registry
+
+The **Care network** workspace supports organization and provider
+applications, status feedback, verified directories, provider affiliation
+invitations, and organization-scoped membership management. Platform
+administrators review applications and can suspend or reinstate organizations
+and providers. Provider status and each organization affiliation are
+independent; exchange eligibility is checked from current database state.
+
+Registry endpoints are under `/api/v1`. Organization administrators can only
+manage organizations assigned to them, and a provider must accept an
+invitation before an organization administrator can activate the affiliation.
+The platform administrator has read-only affiliation oversight. Public
+directories exclude pending organizations, unverified providers, and private
+verification references.
+
+Review is a manual prototype workflow. Evidence references are opaque IDs and
+are not uploaded or independently checked; do not claim official registry
+verification or production credential assurance. The registry migration is
+additive, but verify it against a disposable PostgreSQL database before
+applying it to any deployment.
 
 ## Consent-aware clinical files
 

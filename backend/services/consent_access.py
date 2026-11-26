@@ -4,6 +4,7 @@ from sqlalchemy import exists, or_
 from sqlalchemy.orm import Session
 
 import models
+from services.registry import provider_is_eligible
 
 
 def _active_consent_query(
@@ -33,6 +34,8 @@ def has_active_consent(
     resource_type: str,
     purpose: str = "TREATMENT",
 ) -> bool:
+    if not provider_is_eligible(db, grantee_id):
+        return False
     grants = _active_consent_query(db, grantee_id, purpose).filter(
         models.Consent.patient_id == patient_id,
     ).all()
@@ -45,6 +48,8 @@ def consented_patient_ids(
     resource_type: str,
     purpose: str = "TREATMENT",
 ) -> list[str]:
+    if not provider_is_eligible(db, grantee_id):
+        return []
     grants = _active_consent_query(db, grantee_id, purpose).all()
     return sorted({
         consent.patient_id

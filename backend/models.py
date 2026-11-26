@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, CheckConstraint, Column, String, DateTime, ForeignKey, JSON, Integer, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
 from database import Base
 
 
@@ -185,3 +185,220 @@ class AuditLog(Base):
     prev_hash = Column(String, nullable=False)
     curr_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class HealthcareOrganization(Base):
+    __tablename__ = "healthcare_organizations"
+    __table_args__ = (
+        CheckConstraint(
+            "organization_type IN ('HOSPITAL', 'CLINIC', 'DIAGNOSTIC_LABORATORY', 'OTHER')",
+            name="ck_healthcare_organization_type",
+        ),
+        CheckConstraint(
+            "status IN ('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'SUSPENDED')",
+            name="ck_healthcare_organization_status",
+        ),
+        UniqueConstraint(
+            "registration_authority",
+            "registration_identifier",
+            name="uq_healthcare_organization_registration",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    legacy_user_id = Column(String, ForeignKey("users.id"), nullable=True, unique=True)
+    legal_name = Column(String(200), nullable=False)
+    display_name = Column(String(160), nullable=False)
+    organization_type = Column(String(32), nullable=False)
+    registration_authority = Column(String(160), nullable=True)
+    registration_identifier = Column(String(160), nullable=True)
+    address = Column(JSON, nullable=False, default=dict)
+    contact_email = Column(String(254), nullable=True)
+    contact_phone = Column(String(40), nullable=True)
+    administrative_contact_name = Column(String(120), nullable=False)
+    administrative_contact_email = Column(String(254), nullable=False)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    fhir_resource_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    reviewed_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    decision_reason = Column(String(1000), nullable=True)
+
+
+class OrganizationApplication(Base):
+    __tablename__ = "organization_applications"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED')",
+            name="ck_organization_application_status",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    applicant_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    decision_reason = Column(String(1000), nullable=True)
+    evidence_references = Column(JSON, nullable=False, default=list)
+
+
+class OrganizationReviewDecision(Base):
+    __tablename__ = "organization_review_decisions"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('UNDER_REVIEW', 'APPROVED', 'REJECTED', 'SUSPENDED', 'REINSTATED')",
+            name="ck_organization_review_decision",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    application_id = Column(String, ForeignKey("organization_applications.id"), nullable=True, index=True)
+    reviewer_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    decision = Column(String(24), nullable=False)
+    reason = Column(String(1000), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class HealthcareProvider(Base):
+    __tablename__ = "healthcare_providers"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'UNDER_REVIEW', 'VERIFIED', 'REJECTED', 'SUSPENDED')",
+            name="ck_healthcare_provider_status",
+        ),
+        UniqueConstraint(
+            "registration_authority",
+            "registration_number",
+            name="uq_healthcare_provider_registration",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    account_id = Column(String, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    professional_name = Column(String(160), nullable=False)
+    registration_authority = Column(String(160), nullable=True)
+    registration_number = Column(String(120), nullable=True)
+    qualifications = Column(JSON, nullable=False, default=list)
+    specialization = Column(String(120), nullable=True)
+    public_profile = Column(String(1000), nullable=True)
+    public_contact_email = Column(String(254), nullable=True)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    fhir_resource_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    reviewed_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    decision_reason = Column(String(1000), nullable=True)
+
+
+class ProviderApplication(Base):
+    __tablename__ = "provider_applications"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'UNDER_REVIEW', 'VERIFIED', 'REJECTED')",
+            name="ck_provider_application_status",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    applicant_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    decision_reason = Column(String(1000), nullable=True)
+    evidence_references = Column(JSON, nullable=False, default=list)
+
+
+class ProviderVerification(Base):
+    __tablename__ = "provider_verifications"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('UNDER_REVIEW', 'VERIFIED', 'REJECTED', 'SUSPENDED', 'REINSTATED')",
+            name="ck_provider_verification_decision",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    application_id = Column(String, ForeignKey("provider_applications.id"), nullable=True, index=True)
+    reviewer_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    decision = Column(String(24), nullable=False)
+    method = Column(String(40), nullable=False, default="MANUAL_REVIEW")
+    source = Column(String(200), nullable=True)
+    reason = Column(String(1000), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class OrganizationAffiliation(Base):
+    __tablename__ = "organization_affiliations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('INVITED', 'PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'ENDED')",
+            name="ck_organization_affiliation_status",
+        ),
+        Index(
+            "ix_org_affiliation_org_provider_status",
+            "organization_id",
+            "provider_id",
+            "status",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    account_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    organization_role = Column(String(40), nullable=False, default="PROVIDER")
+    status = Column(String(24), nullable=False, default="INVITED", index=True)
+    invited_by_id = Column(String, ForeignKey("users.id"), nullable=False)
+    invitation_message = Column(String(500), nullable=True)
+    decision_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    decision_reason = Column(String(1000), nullable=True)
+    invited_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    accepted_at = Column(DateTime, nullable=True)
+    effective_from = Column(DateTime, nullable=True)
+    effective_until = Column(DateTime, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class OrganizationRoleAssignment(Base):
+    __tablename__ = "organization_role_assignments"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('ORGANIZATION_ADMIN', 'ORGANIZATION_STAFF')",
+            name="ck_organization_role_assignment_role",
+        ),
+        Index(
+            "ix_org_role_assignment_scope",
+            "organization_id",
+            "user_id",
+            "role",
+            "revoked_at",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String(32), nullable=False)
+    granted_by_id = Column(String, ForeignKey("users.id"), nullable=False)
+    granted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class OrganizationAffiliationEvent(Base):
+    __tablename__ = "organization_affiliation_events"
+    __table_args__ = (
+        CheckConstraint(
+            "to_status IN ('INVITED', 'PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'ENDED')",
+            name="ck_organization_affiliation_event_status",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    affiliation_id = Column(String, ForeignKey("organization_affiliations.id"), nullable=False, index=True)
+    actor_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    from_status = Column(String(24), nullable=True)
+    to_status = Column(String(24), nullable=False)
+    reason = Column(String(1000), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)

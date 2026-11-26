@@ -1,686 +1,1028 @@
-# ROLE: Senior Full-Stack Engineer, Healthcare Interoperability Architect, DevSecOps Engineer
+# MASTER DEVELOPMENT PROMPT
+# HealthHarbor — Patient-Centric, Consent-Aware Healthcare Information Exchange Network
 
-You are responsible for completing my existing final-year project, **HealthHarbor**, into a fully integrated, demonstrable healthcare interoperability platform.
+## 1. Your Role
 
-Work directly inside the existing repository using GitHub Copilot Agent mode in VS Code.
+Act as a principal software architect, senior healthcare interoperability engineer, backend engineer, application security specialist, database architect, and frontend product engineer.
 
-You must inspect the existing source code, understand the architecture, identify incomplete implementations, and finish the project systematically.
+You are working on an existing project named HealthHarbor.
 
-Do NOT rebuild the project from scratch.
-Do NOT replace working modules with generic implementations.
-Do NOT remove existing features.
-Do NOT introduce unnecessary technologies or architectural complexity.
+Your task is to evolve the existing application into a secure, patient-centric healthcare information exchange platform that connects independently operated hospitals, doctors, diagnostic laboratories, and patients.
+
+Do not treat this as a new project.
+
+Inspect the existing repository, preserve completed functionality, understand existing architectural decisions, and extend the system incrementally.
+
+The final objective is a working healthcare exchange network, not merely a collection of disconnected dashboards.
 
 ---
 
-# 1. PROJECT OBJECTIVE
+# 2. PRODUCT VISION — NON-NEGOTIABLE
 
-HealthHarbor is a secure, consent-aware healthcare data exchange platform connecting:
+The central problem HealthHarbor must solve:
 
-- Patients
-- Physicians
-- Healthcare organizations
-- Laboratory supervisors
-- Laboratory technicians
-- Administrators
+A patient visits Hospital A, receives prescriptions, laboratory reports, diagnostic results, and other clinical documents.
 
-The system uses HL7 FHIR R4 for healthcare interoperability, Keycloak for identity management, PostgreSQL for persistence, and Hyperledger Fabric for selected audit and provenance events.
+Later, the same patient visits a different doctor at Hospital B.
 
-Its primary objective is to let patients control access to their healthcare records while supporting secure collaboration between healthcare professionals and organizations.
+The patient should be able to identify that doctor, authorize access to relevant medical records, and securely share those records without depending on physical documents or manually transferring files between hospitals.
 
-Use synthetic patient and clinical data exclusively.
+The receiving doctor should be able to review the authorized records and continue the patient's care.
 
-# 2. EXISTING TECHNOLOGY STACK
+The patient remains at the center of the system.
 
-Preserve the current technology stack:
+HealthHarbor must provide:
 
-Frontend:
-- React
-- Existing Vite setup
-- Existing CSS and UI components
+1. Verified healthcare professional identities.
+2. Verified healthcare organizations.
+3. Controlled hospital and laboratory onboarding.
+4. Patient-doctor discovery and relationships.
+5. Patient-controlled consent.
+6. Secure cross-organization document exchange.
+7. Healthcare interoperability through FHIR.
+8. Traceable access and document provenance.
+9. Organization-level administration.
+10. A scalable foundation for future hospital integrations.
 
-Backend:
-- Python
-- FastAPI
-- SQLAlchemy
-- Alembic
-- PostgreSQL
+The platform should support the exchange of:
 
-Authentication:
-- Keycloak
-- OpenID Connect
-- OAuth 2.0 Authorization Code Flow with PKCE
-- JWT validation
+- Prescriptions.
+- Laboratory reports.
+- Diagnostic reports.
+- Medical certificates.
+- Discharge summaries.
+- Clinical documents.
+- Relevant FHIR resources.
+- Other permitted patient healthcare records.
 
-Healthcare interoperability:
-- HAPI FHIR R4
-- HL7 FHIR resources
+Do not reduce the product to a file-upload application.
 
-Blockchain:
-- Hyperledger Fabric
-- Go chaincode
-- Existing HTTP Gateway adapter
-- Transactional outbox
+---
 
-Infrastructure:
-- Docker
-- Docker Compose
-- Existing environment configuration
+# 3. EXISTING ARCHITECTURE — PRESERVE AND EXTEND
 
-Testing:
-- Python unittest
-- Existing frontend build scripts
-- OWASP ZAP
-- k6
+The current project uses:
 
-Do not change the technology stack without a demonstrated technical necessity.
+- Frontend: React + Vite.
+- Backend: FastAPI + Python.
+- ORM: SQLAlchemy.
+- Migrations: Alembic.
+- Database: PostgreSQL.
+- Authentication: Keycloak / OIDC / OAuth2 Authorization Code + PKCE.
+- Healthcare interoperability: HAPI FHIR R4.
+- Blockchain: Hyperledger Fabric with Go chaincode.
+- Integration: Fabric HTTP Gateway adapter and transactional outbox.
+- Infrastructure: Docker Compose.
+- Security testing: Python tests and OWASP ZAP.
+- Performance testing: k6.
 
-# 3. IMPORTANT EXISTING IMPLEMENTATION
+Inspect the current source code before designing new modules.
 
-Before making changes, inspect:
+Existing capabilities include:
 
+- Patient, physician, administrator, laboratory supervisor, and technician roles.
+- Organization membership.
+- Patient consent management.
+- Named-physician organization consent.
+- Resource-scoped access authorization.
+- Clinical file upload and download.
+- Laboratory workflow.
+- FHIR server integration foundations.
+- Keycloak integration foundations.
+- Blockchain event integration foundations.
+- Audit hash-chain logging.
+- Database-backed login rate limiting.
+
+Do not duplicate existing functionality.
+
+Reuse and extend existing models, services, routers, schemas, and frontend components wherever appropriate.
+
+Read the latest:
 - PROJECT_STATUS.md
-- README.md
-- Backend source
-- Frontend source
-- Database models
-- Alembic migrations
-- API routes
-- Authentication services
-- Consent authorization services
-- FHIR integration
-- Fabric chaincode and adapter
-- Docker Compose files
-- Keycloak realm configuration
-- Existing tests
-- Security scripts
+- IMPLEMENTATION_STATUS.md
+- SECURITY_ASSESSMENT.md
+- TESTING_REPORT.md
+- INTEGRATION_GUIDE.md
+- ARCHITECTURE_REVIEW.md
+- prompt.md
 
-The project already has substantial implementation.
+Treat these documents and the current source code as the starting point.
 
-Existing features include:
+---
 
-1. Role-based authentication.
-2. Patient-only local registration.
-3. Administrator-provisioned staff.
-4. Patient consent management.
-5. Resource-specific consent.
-6. Consent expiry and immediate revocation.
-7. Physician-specific and organization-based consent.
-8. Administrator-managed organization memberships.
-9. Named-practitioner organization access.
-10. Treatment-only organization grants.
-11. Laboratory workflow.
-12. Clinical file management.
-13. Off-chain clinical document storage.
-14. Local audit hash-chain verification.
-15. HAPI FHIR integration.
-16. Keycloak integration.
-17. Hyperledger Fabric chaincode and adapter.
-18. PostgreSQL and Alembic migrations.
-19. OWASP ZAP runner.
-20. k6 load-testing runner.
+# 4. ARCHITECTURAL DIRECTION
 
-Treat these as existing capabilities to verify and complete, not as reasons to recreate them.
+Use a centralized, multi-tenant healthcare exchange architecture for the initial implementation.
 
-# 4. TEMPORARILY DEFERRED ISSUE
+HealthHarbor will provide a shared exchange platform connecting participating healthcare organizations.
 
-The historical audit-chain integrity mismatch beginning at entry #33 is explicitly OUT OF SCOPE for this implementation pass.
+However, design integration boundaries so that future hospitals can retain their own HIS/EHR systems and exchange information through standardized APIs.
+
+The logical architecture should contain:
+
+A. Identity and Access Layer
+- Keycloak.
+- Patient identity.
+- Professional identity.
+- Organization identity.
+- Role and permission management.
+
+B. Healthcare Registry Layer
+- Healthcare organization registry.
+- Verified provider registry.
+- Organization membership.
+- Professional verification.
+- Hospital onboarding.
+
+C. Patient Relationship Layer
+- Provider discovery.
+- Patient-doctor relationships.
+- Consultation requests.
+- Referrals.
+- Record-sharing requests.
+
+D. Consent and Authorization Layer
+- Patient consent.
+- Resource-level authorization.
+- Organization-level authorization.
+- Named-provider authorization.
+- Consent expiration.
+- Consent revocation.
+- Access history.
+
+E. Healthcare Exchange Layer
+- Document discovery.
+- Secure document storage.
+- Secure document retrieval.
+- Cross-organization sharing.
+- FHIR interoperability.
+- Document provenance.
+
+F. Clinical Workflow Layer
+- Prescriptions.
+- Laboratory requests.
+- Laboratory reports.
+- Diagnostic reports.
+- Physician review.
+
+G. Trust and Audit Layer
+- Application audit records.
+- Integrity verification.
+- Hyperledger Fabric integration for selected verifiable events.
+
+H. Administration Layer
+- Platform administrator.
+- Organization administrator.
+- Provider approval.
+- Organization approval.
+- Membership management.
+- Compliance and audit review.
+
+---
+
+# 5. PHASE ONE — HEALTHCARE ORGANIZATION REGISTRY
+
+Build a proper organization onboarding and management system.
+
+Supported organization types:
+
+- Hospitals.
+- Clinics.
+- Diagnostic laboratories.
+- Other authorized healthcare institutions.
+
+Each organization should have:
+
+- Unique organization identifier.
+- Legal or registered name.
+- Organization type.
+- Registration details.
+- Address.
+- Contact information.
+- Administrative contact.
+- Verification status.
+- Activation status.
+- Created and updated timestamps.
+
+Organization registration workflow:
+
+1. An authorized representative submits an organization registration request.
+2. The platform administrator reviews the request.
+3. Supporting registration information is checked.
+4. The organization is approved or rejected.
+5. An organization administrator is assigned.
+6. The organization becomes active.
+7. The administrator can manage its staff and memberships.
+
+Organization statuses should include appropriate states such as:
+
+- PENDING.
+- UNDER_REVIEW.
+- APPROVED.
+- REJECTED.
+- SUSPENDED.
+
+Do not allow unapproved organizations to access exchange services.
+
+Implement organization administration APIs and frontend screens.
+
+---
+
+# 6. PHASE TWO — VERIFIED HEALTHCARE PROVIDER REGISTRY
+
+Build a professional identity system for doctors.
+
+A doctor must have an independent professional identity, separate from their employment at a particular hospital.
+
+A doctor profile should support:
+
+- Unique provider identifier.
+- Full name.
+- Professional registration number.
+- Registration authority.
+- Qualifications.
+- Specialization.
+- Contact details.
+- Professional verification status.
+- Account activation status.
+- Organization memberships.
+
+Doctor onboarding workflow:
+
+1. Doctor submits a registration request.
+2. Doctor provides professional details and supporting evidence.
+3. HealthHarbor platform administrators review professional eligibility.
+4. The selected hospital verifies the doctor's affiliation.
+5. Both required approvals are recorded.
+6. The doctor receives an active account.
+7. The doctor can access authorized HealthHarbor services.
+
+Implement a controlled approval workflow.
+
+Do not automatically activate professional accounts after ordinary email registration.
+
+Do not invent professional credentials or claim to verify a medical registration number against an external authority unless an actual verification integration exists.
+
+Design the verification service so authoritative professional registration sources can be integrated later.
+
+### Multi-hospital memberships
+
+A doctor may work at more than one hospital.
+
+Therefore:
+
+- Provider identity must not be duplicated for each hospital.
+- A doctor can have multiple organization memberships.
+- Each membership has its own status and permissions.
+- An organization administrator can manage only their own organization's memberships.
+- Suspending one membership must not automatically suspend the provider's entire professional identity.
+- Revocation of platform-level professional eligibility must block the provider's exchange privileges.
+
+Implement proper membership lifecycle management.
+
+---
+
+# 7. PHASE THREE — ACCOUNT AND ROLE MANAGEMENT
+
+Integrate the registry with the existing Keycloak authentication system.
+
+Keycloak remains responsible for authentication.
+
+FastAPI and PostgreSQL remain responsible for application-specific authorization, provider profiles, organization memberships, and approval workflows.
+
+Implement:
+
+- Patient self-registration.
+- Doctor application registration.
+- Organization registration.
+- Administrator-managed staff provisioning.
+- Technician registration or invitation.
+- Account activation.
+- Account suspension.
+- Membership termination.
+- Role assignment.
+- Organization-scoped permissions.
+
+Never trust role or organization identifiers supplied directly by a frontend request.
+
+Derive the authenticated user's identity from validated tokens and resolve permissions from trusted backend records.
+
+Maintain clear separation between:
+
+- Platform administrator.
+- Organization administrator.
+- Verified doctor.
+- Patient.
+- Laboratory supervisor.
+- Laboratory technician.
+
+Create a proper administration workspace for:
+
+1. Platform administrators.
+2. Hospital administrators.
+3. Laboratory administrators.
+
+Each must have appropriate boundaries.
+
+---
+
+# 8. PHASE FOUR — PATIENT-CENTRIC PROVIDER DISCOVERY
+
+Build a verified healthcare provider directory.
+
+Patients must be able to discover providers through:
+
+- Doctor name.
+- Professional registration identifier.
+- Specialization.
+- Hospital.
+- Organization.
+- Location.
+
+Only eligible verified providers should appear as active exchange participants.
+
+Doctor search results should display:
+
+- Doctor name.
+- Verified professional status.
+- Specialization.
+- Qualifications where verified.
+- Professional registration information where appropriate.
+- Participating hospital affiliations.
+- Organization status.
+
+Patients must be able to view a provider's profile before initiating a relationship.
+
+Do not expose sensitive personal information or private contact information unnecessarily.
+
+Build:
+
+- Provider search API.
+- Organization search API.
+- Provider profile API.
+- Provider directory frontend.
+- Hospital directory frontend.
+
+Implement pagination, filtering, validation, and safe query handling.
+
+---
+
+# 9. PHASE FIVE — PATIENT-DOCTOR RELATIONSHIPS AND INITIAL COMMUNICATION
+
+A patient discovering a doctor must not automatically grant access to all medical records.
+
+Introduce a formal patient-provider relationship lifecycle.
+
+Possible states:
+
+- REQUESTED.
+- ACCEPTED.
+- DECLINED.
+- ACTIVE.
+- CLOSED.
+
+Support:
+
+1. Patient initiates a relationship or consultation request.
+2. Doctor or authorized hospital staff reviews it.
+3. Doctor accepts or declines.
+4. HealthHarbor records the relationship.
+5. Doctor may request specific clinical information.
+6. Patient approves or rejects the record-sharing request.
+
+Also implement a referral workflow where an existing physician can refer a patient to another verified provider.
+
+The referral must preserve:
+
+- Referring provider.
+- Receiving provider.
+- Patient identity.
+- Referral purpose.
+- Relevant document references.
+- Consent or other valid authorization.
+- Referral status.
+- Timestamps.
+
+Do not confuse a patient-doctor relationship with authorization to read all records.
+
+A relationship provides context. Consent determines permitted access.
+
+Do not build an unrestricted doctor-to-doctor messaging system unless necessary for the defined clinical workflow.
+
+If communication is implemented, use controlled clinical messages or referral requests, not unrestricted personal messaging.
+
+---
+
+# 10. PHASE SIX — SECURE CROSS-ORGANIZATION DOCUMENT EXCHANGE
+
+This is the most important functional capability of HealthHarbor.
+
+Build a proper document exchange service.
+
+Documents may originate from:
+
+- Hospitals.
+- Clinics.
+- Doctors.
+- Diagnostic laboratories.
+- Other authorized healthcare institutions.
+
+Supported document categories should include:
+
+- Prescriptions.
+- Laboratory reports.
+- Diagnostic reports.
+- Discharge summaries.
+- Medical certificates.
+- Clinical notes.
+- Other permitted documents.
+
+### Document ingestion
+
+When an authorized provider uploads a document:
+
+1. Authenticate the uploader.
+2. Verify their professional status.
+3. Verify their organization membership.
+4. Validate patient association.
+5. Validate document type and size.
+6. Validate file content rather than trusting file extensions.
+7. Perform safe file scanning where available.
+8. Encrypt the document before persistent storage.
+9. Calculate a cryptographic integrity hash.
+10. Persist document metadata.
+11. Create or update the relevant FHIR resource.
+12. Record document provenance and audit events.
+
+### Document storage
+
+Implement a storage abstraction.
+
+Do not tightly couple business logic to a single local filesystem path.
+
+The initial deployment may use encrypted local or object storage, but the architecture should support future S3-compatible or hospital-controlled storage.
+
+Store metadata separately from document bytes.
+
+The document metadata should contain:
+
+- Document identifier.
+- Patient identifier.
+- Uploading provider.
+- Source organization.
+- Document category.
+- FHIR DocumentReference identifier.
+- Storage reference.
+- Integrity hash.
+- Encryption metadata where appropriate.
+- Creation timestamp.
+- Document status.
+- Provenance information.
+
+Never store document contents directly on Hyperledger Fabric.
+
+### Patient-controlled sharing
+
+A patient should be able to:
+
+1. View their available clinical documents.
+2. Select one or more documents.
+3. Select a verified doctor or organization.
+4. Choose the permitted document categories or specific resources.
+5. Set an appropriate expiration period.
+6. Review the sharing request.
+7. Grant or reject consent.
+8. Revoke future access.
+9. View the access history.
+
+Enforce consent at the backend for every protected operation.
+
+Frontend visibility is not authorization.
+
+### Secure document retrieval
+
+When a doctor at Hospital B requests a document originating from Hospital A:
+
+1. Validate the doctor's authentication.
+2. Validate professional eligibility.
+3. Validate active organization membership.
+4. Resolve the patient identity.
+5. Validate the patient-provider relationship where applicable.
+6. Validate the exact consent grant and resource scope.
+7. Validate expiration and revocation.
+8. Authorize the document request.
+9. Retrieve the encrypted document.
+10. Decrypt only within the authorized service boundary.
+11. Stream the document securely to the authorized recipient.
+12. Record the access event.
+
+Use authenticated streaming or short-lived, narrowly scoped download links.
+
+Avoid permanent public file URLs.
+
+Do not allow access through predictable document IDs.
+
+Prevent IDOR and cross-organization access.
+
+Revocation must block subsequent retrievals. Do not claim that revocation can erase copies already legitimately downloaded by recipients.
+
+### Document integrity
+
+Use cryptographic hashes to detect unexpected document changes.
+
+Preserve document provenance:
+
+- Who created it.
+- Which organization issued it.
+- Who uploaded it.
+- When it was uploaded.
+- Whether it was subsequently replaced or superseded.
+
+Do not silently overwrite clinical documents.
+
+Use versioning or supersession records where appropriate.
+
+---
+
+# 11. PHASE SEVEN — FHIR INTEROPERABILITY
+
+Use HAPI FHIR R4 as the interoperability foundation.
+
+Inspect existing resource implementations before adding new ones.
+
+Use appropriate FHIR resources, including where supported:
+
+- Patient.
+- Practitioner.
+- PractitionerRole.
+- Organization.
+- Encounter.
+- Consent.
+- DocumentReference.
+- Binary.
+- ServiceRequest.
+- Observation.
+- DiagnosticReport.
+- MedicationRequest.
+- Provenance.
+
+FHIR resource selection must reflect actual application workflows.
+
+Implement consistent identifiers and references.
+
+For document exchange:
+
+- DocumentReference should describe the document.
+- Binary or another supported secure storage mechanism may represent document content where appropriate.
+- Do not expose unrestricted Binary endpoints.
+- Do not assume FHIR server authorization automatically enforces HealthHarbor consent.
+- Backend authorization must remain authoritative.
+
+Test actual resource creation and retrieval.
+
+Do not claim full FHIR interoperability based only on successful server startup or metadata retrieval.
+
+---
+
+# 12. PHASE EIGHT — MULTI-HOSPITAL EXCHANGE API
+
+HealthHarbor should eventually support hospitals that already operate their own management systems.
+
+Create a clearly defined integration API.
+
+Support future integration through:
+
+- FHIR REST APIs.
+- Secure server-to-server authentication.
+- Organization identity.
+- Authorized document exchange.
+- Patient identity resolution.
+- Consent verification.
+- Audit and provenance.
+
+Do not require every hospital to replace its existing HIS/EHR.
+
+The initial deployment can provide HealthHarbor web portals, while integration APIs allow existing systems to participate.
+
+Design the API with versioning, documentation, input validation, and strict organization isolation.
+
+Do not expose internal database models directly as public API contracts.
+
+---
+
+# 13. PHASE NINE — AUDIT AND HYPERLEDGER FABRIC
+
+Retain the existing audit architecture.
+
+The PostgreSQL audit logger remains responsible for application audit records.
+
+Hyperledger Fabric should be used selectively for verifiable events.
+
+Potential events:
+
+- Document registration.
+- Document integrity hash.
+- Consent grant.
+- Consent revocation.
+- Authorized sharing event.
+- Organization verification event.
+
+Do not put:
+
+- Patient names.
+- Medical reports.
+- Prescriptions.
+- Clinical observations.
+- Personal identifiers.
+- Authentication secrets.
+
+on the blockchain.
+
+Use appropriate pseudonymous references and data minimization.
+
+Only report a ledger event as committed after Fabric confirms the transaction.
+
+Preserve the transactional outbox and retry mechanism.
+
+### Critical historical audit protection
+
+The known historical audit discontinuity at PostgreSQL entry #33 must remain untouched.
 
 Do not:
 
-- Modify historical audit records.
-- Rewrite historical hashes.
-- Reset the audit database.
-- Delete audit entries.
-- Attempt to conceal historical verification failures.
-- Spend implementation time investigating the #33 mismatch.
+- Rewrite it.
+- Recompute its stored hashes.
+- Delete it.
+- Reset the database.
+- Conceal the integrity warning.
 
-Preserve all existing audit records and existing verification behavior.
+The recent PostgreSQL READ COMMITTED concurrency fix must be preserved.
 
-You may continue implementing and testing future audit writes, audit concurrency protections, and new-event integrity without attempting to repair historical records.
+New audit events must continue linking to the immediate previous entry according to the existing audit format.
 
-Record this deferred issue in the project documentation as:
+---
 
-"Historical audit-chain mismatch investigation deferred to a separate maintenance task. Historical records remain preserved and unchanged."
+# 14. PHASE TEN — FRONTEND PRODUCT EXPERIENCE
 
-# 5. IMPLEMENTATION PHASES
+The application must feel like one coherent healthcare platform.
 
-Complete the following phases in order.
+Extend the existing React frontend rather than creating unrelated dashboards.
 
-## PHASE 0 — Repository inspection and planning
+Build the following workspaces.
 
-First:
+### Patient Portal
 
-1. Inspect the repository structure.
-2. Read the implementation status document.
-3. Inspect the actual implementation of every integration.
-4. Check Git status and existing uncommitted changes.
-5. Identify the active branch.
-6. Identify missing dependencies and environment requirements.
-7. Identify incomplete functions, placeholder implementations, mocked integrations, and TODOs.
-8. Identify existing tests and their coverage.
-
-Do not overwrite existing work.
-
-Create or update:
-
-- IMPLEMENTATION_STATUS.md
-- ARCHITECTURE_REVIEW.md
-- COMPLETION_ROADMAP.md
-
-These documents must reflect actual code, not assumptions.
-
-Proceed with implementation after completing the inspection. Do not stop after merely producing a report.
-
-## PHASE 1 — Application stability
-
-Ensure the existing application starts reliably.
-
-Verify:
-
-- PostgreSQL starts and becomes healthy.
-- Backend connects to PostgreSQL.
-- HAPI FHIR starts and exposes R4 metadata.
-- Backend health checks accurately report dependency readiness.
-- Frontend connects to the backend through the correct IPv4 API address.
-- CORS configuration is correct.
-- Login works from the browser.
-- All existing role workspaces load.
-- API timeout and error handling work.
-- Docker Compose profiles and service dependencies are correct.
-
-The current development setup has a separate Vite process. Document how to start it.
-
-Do not change working Docker networking configuration without identifying a concrete problem.
-
-## PHASE 2 — Database and migration completion
-
-Verify all existing Alembic migrations.
-
-Pay particular attention to the latest organization-consent migration:
-
-`71b6c4a2d9e1`
-
-Tasks:
-
-1. Inspect the migration and corresponding models.
-2. Check migration ordering and dependencies.
-3. Test migration on a fresh SQLite database.
-4. Test migration against a backed-up PostgreSQL database.
-5. Verify organization and practitioner membership persistence.
-6. Verify consent persistence and expiration.
-7. Verify existing records remain compatible.
-8. Verify application startup does not silently create production tables.
-9. Verify rollback behavior where safe and supported.
-
-Never delete or reset the existing PostgreSQL database.
-
-Before applying migrations to existing data, require a verified backup.
-
-## PHASE 3 — Complete live Keycloak authentication
-
-Use the existing Keycloak realm and client configuration.
-
-Complete and verify:
-
-1. Realm import.
-2. Browser login using Authorization Code + PKCE.
-3. JWT signature validation.
-4. Issuer validation.
-5. Audience validation.
-6. Expiration validation.
-7. Subject validation.
-8. Application-role mapping.
-9. Patient registration and verified-email provisioning.
-10. Administrator-provisioned staff accounts.
-11. User-to-application-profile linking.
-12. Token refresh.
-13. Logout.
-14. Expired-token behavior.
-15. Unauthorized-role rejection.
-16. Disabled-user behavior.
-
-Verify that frontend and backend authentication modes are consistent.
-
-Do not bypass token validation to make login succeed.
-
-Do not introduce default production credentials or hardcoded secrets.
-
-## PHASE 4 — Complete HAPI FHIR R4 interoperability
-
-HAPI FHIR 7.4.0 is already configured for R4 and has successfully started against PostgreSQL.
-
-Now prove real interoperability.
-
-Inspect the existing FHIR adapter and application service layer.
-
-Verify the implemented resources, including:
-
-- Patient
-- Practitioner
-- Organization
-- ServiceRequest
-- Specimen
-- Observation
-- DiagnosticReport
-- Consent
-- DocumentReference
-
-For each supported resource:
-
-1. Create a synthetic resource.
-2. Validate it using HAPI `$validate` where supported.
-3. Persist it through the actual HAPI server.
-4. Retrieve it from HAPI.
-5. Update it using version-aware operations.
-6. Verify references.
-7. Verify application-level authorization.
-8. Verify error handling for invalid resources.
-9. Verify persistence after service restart.
-
-Do not simulate HAPI responses in tests presented as live integration tests.
-
-Use authoritative HAPI reads wherever the architecture requires them.
-
-Verify that the API does not falsely report success when HAPI is unavailable.
-
-## PHASE 5 — Complete patient consent and authorization
-
-This is a core project feature.
-
-Verify all existing consent scenarios against live PostgreSQL and HAPI.
-
-Patient consent must support:
-
-- A specific physician.
-- An organization and named physician.
-- Resource-specific permissions.
-- Defined validity of 1–30 days.
-- Automatic server-side expiry.
-- Immediate revocation.
-- Treatment-only purpose for organization grants.
-- Active organization membership.
-- Patient access history.
-
-Verify authorization at the backend for:
-
-- Patient resource reads.
-- Clinical file downloads.
-- DocumentReference access.
-- ServiceRequest creation.
-- Observation and DiagnosticReport access where implemented.
-- Physician access.
-- Organization-based access.
-- Laboratory workflows.
-
-Test the following denial scenarios:
-
-- Expired consent.
-- Revoked consent.
-- Removed organization membership.
-- Wrong physician.
-- Wrong patient.
-- Wrong resource type.
-- Wrong purpose.
-- Unauthorized role.
-- Unassigned technician.
-- Unowned laboratory request.
-
-Do not rely on frontend restrictions alone.
-
-Verify that a revoked consent immediately blocks subsequent requests.
-
-Ensure organization consent never unintentionally grants access to every organization member.
-
-## PHASE 6 — Complete Hyperledger Fabric integration
-
-Inspect the existing Go chaincode, Gateway adapter, and transactional outbox.
-
-Do not replace the current implementation.
-
-Complete the actual deployment and integration.
-
-Tasks:
-
-1. Verify both Go modules.
-2. Build the adapter image.
-3. Start the existing two-organization Fabric test network.
-4. Configure peer endorsement according to the existing deployment guidance.
-5. Deploy the chaincode.
-6. Configure Gateway connectivity.
-7. Verify identity and certificate handling.
-8. Submit a synthetic audit/provenance event from the backend.
-9. Verify the event is committed on the ledger.
-10. Capture and verify its transaction ID.
-11. Verify outbox retry behavior.
-12. Verify duplicate submission handling.
-13. Verify rejected event types.
-14. Verify failure recovery after Gateway unavailability.
-15. Verify commit status is only recorded after confirmed ledger commitment.
-
-Only approved metadata, pseudonymous references, and permitted hashes should be submitted.
-
-Never submit patient names, clinical documents, medical records, or unnecessary personal information to Fabric.
-
-Do not mark a transaction committed merely because the Gateway accepted an HTTP request.
-
-## PHASE 7 — Complete laboratory workflow
-
-Verify the complete workflow:
-
-REQUESTED
-→ ACCEPTED
-→ ASSIGNED
-→ SPECIMEN_REGISTERED
-→ PROCESSING
-→ RESULTS_SUBMITTED
-→ FINALIZED
-→ PHYSICIAN_REVIEWED
-
-Verify:
-
-- Physician creates a ServiceRequest.
-- Correct laboratory receives the request.
-- Laboratory supervisor accepts it.
-- Supervisor assigns a technician.
-- Technician registers the specimen.
-- Technician submits observations and results.
-- Laboratory finalizes the report.
-- Physician reviews the result.
-
-Enforce ownership, membership, assignment, authorization, and transition ordering.
-
-Verify the appropriate FHIR resources are persisted in HAPI.
-
-Prevent invalid transitions and duplicate requests.
-
-Use synthetic clinical data.
-
-## PHASE 8 — Clinical file security
-
-Review file upload and download functionality.
-
-Existing restrictions include:
-
-- PDF
-- JPEG
-- PNG
-- TXT
-- CSV
-- Maximum 10 MiB
-
-Verify:
-
-1. Server-side file validation.
-2. MIME-type validation.
-3. Safe filename handling.
-4. Path traversal protection.
-5. File size enforcement.
-6. Authenticated downloads.
-7. Patient ownership checks.
-8. Physician Document consent checks.
-9. Laboratory assignment restrictions.
-10. DocumentReference creation and persistence.
-11. File hashing.
-12. Storage persistence after container restart.
-
-Add malware scanning only if a practical, maintainable integration can be implemented in the existing environment.
-
-Do not store clinical files on the blockchain.
-
-## PHASE 9 — Security verification
-
-Complete a security review of the existing application.
-
-Review:
-
-- Authentication and session management.
-- Authorization and privilege escalation.
-- IDOR.
-- SQL injection.
-- XSS.
-- CSRF where applicable.
-- CORS.
-- File upload vulnerabilities.
-- JWT validation.
-- Secret management.
-- Rate limiting.
-- Error disclosure.
-- Logging of sensitive information.
-- Organization membership authorization.
-- Consent enforcement.
-
-Run the existing OWASP ZAP passive baseline against the local application.
-
-Use the existing loopback-only safety restrictions.
-
-Do not target external systems.
-
-Produce:
-
-`SECURITY_ASSESSMENT.md`
-
-Include findings, severity, evidence, remediation, and unresolved risks.
-
-Do not claim that a vulnerability is fixed without testing it.
-
-## PHASE 10 — Performance and reliability
-
-Run the existing k6 load-test suite against the actual local application.
-
-Measure:
-
-- Health endpoint response.
-- Authentication.
-- Authenticated profile requests.
-- Patient resource reads.
-- File listing.
-- Consent checks.
-- ServiceRequest listing.
-
-Use synthetic accounts and data.
-
-Capture:
-
-- Request count.
-- Throughput.
-- Average latency.
-- p95 latency.
-- p99 latency where available.
-- Error rate.
-- Failed requests.
-
-Do not fabricate performance numbers.
-
-Do not label a runner smoke test as a performance benchmark.
-
-Investigate bottlenecks only after obtaining actual results.
-
-Replace process-local login rate limiting with a shared store before claiming horizontal API scalability.
-
-## PHASE 11 — Backup and recovery
-
-Create and verify a PostgreSQL backup and restore procedure.
-
-Requirements:
-
-1. Document backup commands.
-2. Preserve database ownership and permissions.
-3. Verify backup integrity.
-4. Restore into an isolated test database.
-5. Verify schema and essential records.
-6. Verify application connectivity after restoration.
-7. Document recovery steps.
-8. Document file-storage backup and restoration.
-
-Never test recovery by overwriting the live database.
-
-Do not remove Docker volumes.
-
-## PHASE 12 — Frontend completion
-
-Inspect every role workspace.
-
-Verify:
-
-Patient:
-- Dashboard.
-- Clinical files.
+- Personal dashboard.
+- Medical records.
+- Prescriptions.
+- Laboratory reports.
+- Diagnostic documents.
+- Provider directory.
+- Hospital directory.
+- Doctor relationship requests.
+- Referrals.
+- Sharing requests.
 - Consent management.
-- Sharing with physicians and organizations.
 - Access history.
-- Revocation.
 
-Physician:
-- Patient access requests.
-- Consent-aware patient records.
-- Clinical document viewing.
-- ServiceRequest creation.
-- Laboratory results review.
+### Doctor Portal
 
-Laboratory supervisor:
-- Incoming requests.
-- Acceptance.
-- Technician assignment.
-- Workflow monitoring.
+- Professional profile.
+- Verification status.
+- Organization memberships.
+- Patient relationship requests.
+- Patient list limited to authorized relationships.
+- Record access requests.
+- Authorized medical records.
+- Prescriptions and clinical documents.
+- Laboratory workflows.
+- Referrals.
+- Clinical review history.
 
-Laboratory technician:
+### Hospital Administration Portal
+
+- Organization profile.
+- Organization verification status.
+- Staff directory.
+- Doctor affiliation requests.
+- Membership management.
+- Staff invitations.
+- Organization-level audit information.
+- Integration configuration.
+
+### Laboratory Portal
+
+- Laboratory profile.
+- Supervisor workspace.
+- Technician memberships.
 - Assigned requests.
-- Specimen registration.
-- Processing.
-- Result submission.
+- Specimen processing.
+- Results submission.
+- Report publishing.
 
-Administrator:
-- User provisioning.
+### Platform Administration Portal
+
+- Organization onboarding.
+- Professional verification requests.
+- Organization approval.
+- Provider approval.
+- Account suspension.
 - Organization management.
-- Physician membership management.
-- Audit tools.
+- Security and audit review.
 
-Improve loading states, error states, empty states, responsive layout, and form validation.
+Use a consistent design system.
 
-Preserve the existing visual identity and design direction.
+Prioritize clarity, accessibility, responsive layouts, predictable navigation, meaningful loading states, and useful error messages.
 
-Do not redesign the entire application unnecessarily.
+Do not create decorative controls that do nothing.
 
-Run the production build and resolve actual errors.
+Every important action must connect to a real backend operation.
 
-# 6. ENGINEERING RULES
+---
 
-Follow these rules throughout the work:
+# 15. PHASE ELEVEN — DATABASE AND DOMAIN MODEL
 
-1. Inspect before modifying.
-2. Preserve working code.
-3. Do not remove existing features.
-4. Do not invent successful integrations.
-5. Do not replace live integration tests with mocks and claim completion.
-6. Keep clinical data off-chain.
-7. Use synthetic data exclusively.
-8. Never hardcode secrets.
-9. Do not reset databases.
-10. Do not delete Docker volumes.
-11. Do not stop unknown processes.
-12. Do not disable authentication or authorization to bypass errors.
-13. Do not silently suppress failing tests.
-14. Do not claim production readiness prematurely.
-15. Keep code modular and maintainable.
-16. Add regression tests for every bug fixed.
-17. Keep documentation synchronized with actual implementation.
-18. Preserve historical audit records and defer the #33 investigation.
+Inspect the existing SQLAlchemy models and Alembic history.
 
-Before changing files:
+Design new domain models only where necessary.
 
-- Inspect `git status`.
-- Identify existing uncommitted changes.
-- Do not overwrite user modifications.
-- Create a checkpoint commit only with my approval.
+Potential domain entities:
 
-For database changes, require a verified backup before applying them to existing PostgreSQL data.
+- HealthcareOrganization.
+- HealthcareProvider.
+- ProviderVerification.
+- OrganizationMembership.
+- OrganizationApplication.
+- ProviderApplication.
+- PatientProviderRelationship.
+- ConsultationRequest.
+- Referral.
+- DocumentMetadata.
+- DocumentVersion.
+- DocumentAccessRequest.
+- DocumentShare.
+- Consent.
+- ConsentResource.
+- DocumentProvenance.
 
-# 7. EXECUTION STRATEGY
+Reuse existing User, Consent, Organization, and membership models where they already fulfill the required responsibilities.
 
-Work in small, independently verifiable stages.
+Establish:
 
-For every phase:
+- Foreign key constraints.
+- Unique identifiers.
+- Appropriate indexes.
+- Status constraints.
+- Created and updated timestamps.
+- Referential integrity.
+- Tenant isolation.
 
-1. Explain the identified gap.
-2. Identify the relevant files.
-3. Implement the necessary changes.
-4. Run focused tests.
-5. Run relevant regression tests.
-6. Run the integration test where applicable.
-7. Report actual command output and results.
-8. Update implementation documentation.
-9. Identify remaining limitations.
+Use Alembic migrations.
 
-Do not attempt to modify the entire project in one giant operation.
+Do not modify live databases during implementation.
 
-If a service is unavailable, diagnose the actual cause. Do not silently substitute a mock.
+Test migrations on disposable PostgreSQL and SQLite databases where supported.
 
-If a step requires my credentials, approval, or manual environment setup, stop at that step and give me precise instructions.
+Preserve existing records and backward compatibility.
 
-Do not proceed with destructive operations without explicit approval.
+---
 
-Continue to the next independent phase whenever the previous phase has been successfully verified.
+# 16. PHASE TWELVE — SECURITY AND PRIVACY
 
-# 8. FINAL ACCEPTANCE CRITERIA
+Security must be built into every workflow.
 
-The project should only be considered functionally complete when the following can be demonstrated:
+Verify:
 
-- All application services start reliably.
-- All role workspaces function.
-- Keycloak login and refresh work.
-- PostgreSQL persists application data.
-- HAPI FHIR R4 performs actual resource CRUD.
-- Consent is enforced server-side.
-- Consent expiry and revocation work.
-- Named-practitioner organization authorization works.
-- Clinical files remain off-chain.
-- The full laboratory workflow works.
-- Fabric receives and commits permitted events.
-- Committed transaction IDs can be verified.
-- New audit events preserve chain integrity.
-- Historical audit mismatch #33 remains documented as deferred, with no historical records altered.
-- Existing and newly added tests pass.
-- Frontend production build passes.
-- OWASP ZAP assessment is completed.
-- Actual k6 results are recorded.
-- PostgreSQL backup and isolated restore are verified.
-- Documentation accurately describes the working system.
+- OIDC authentication.
+- Professional verification.
+- Organization membership.
+- Role-based authorization.
+- Patient ownership.
+- Consent enforcement.
+- Resource-level authorization.
+- Cross-organization isolation.
+- File integrity.
+- Secure storage.
+- Secure transfer.
+- Audit logging.
+- Rate limiting.
+- Input validation.
+- Error sanitization.
+- Secret management.
 
-# 9. REQUIRED FINAL DOCUMENTATION
+Explicitly test:
 
-Maintain these files:
+1. Doctor from Hospital B attempting to access a Hospital A patient's records without consent.
+2. Doctor with expired consent attempting retrieval.
+3. Doctor with revoked consent attempting retrieval.
+4. Doctor attempting access outside the granted resource scope.
+5. Suspended doctor attempting exchange access.
+6. Doctor whose hospital membership has been terminated.
+7. Technician attempting access to another laboratory's requests.
+8. Patient attempting to access another patient's documents.
+9. Organization administrator attempting to manage another organization's users.
+10. Unauthorized user attempting to retrieve a file using a guessed document identifier.
 
-- README.md
+All unauthorized operations must fail safely and be auditable.
+
+Do not use real patient data.
+
+Consider applicable Indian healthcare privacy and data protection requirements, professional registration requirements, and future ABDM compatibility.
+
+Do not claim legal or ABDM compliance without the necessary validation and integrations.
+
+---
+
+# 17. IMPLEMENTATION STRATEGY
+
+Do not implement all modules in one uncontrolled code-generation pass.
+
+Work in these development milestones.
+
+## Milestone 1 — Domain and architecture design
+
+- Inspect current implementation.
+- Map existing models and services.
+- Identify reusable components.
+- Design domain relationships.
+- Produce API contracts.
+- Produce migration plan.
+- Produce authorization matrix.
+
+Do not modify code until the design is reviewed.
+
+## Milestone 2 — Organization and provider registry
+
+- Organization onboarding.
+- Provider onboarding.
+- Professional verification.
+- Organization approval.
+- Multi-hospital membership.
+- Administrative management.
+
+## Milestone 3 — Patient-provider relationships
+
+- Provider discovery.
+- Organization directory.
+- Patient-doctor requests.
+- Referral workflows.
+- Relationship lifecycle.
+
+## Milestone 4 — Secure document exchange
+
+- Document metadata.
+- Encrypted storage.
+- Document discovery.
+- Patient-controlled sharing.
+- Consent-aware retrieval.
+- Document provenance.
+- Cross-organization tests.
+
+## Milestone 5 — FHIR interoperability
+
+- Provider and organization resource mapping.
+- DocumentReference integration.
+- Clinical resource exchange.
+- Real FHIR round-trip tests.
+
+## Milestone 6 — External hospital integration
+
+- Versioned integration APIs.
+- Organization authentication.
+- FHIR exchange.
+- Server-to-server workflows.
+
+## Milestone 7 — Blockchain and audit verification
+
+- Event selection.
+- Outbox integration.
+- Fabric commit confirmation.
+- Audit integrity tests.
+
+## Milestone 8 — Complete frontend experience
+
+- Patient portal.
+- Doctor portal.
+- Hospital administration.
+- Platform administration.
+- Laboratory portal.
+- End-to-end workflows.
+
+## Milestone 9 — Complete system verification
+
+- Cross-hospital acceptance tests.
+- Security tests.
+- Migration tests.
+- Integration tests.
+- Performance tests.
+- Deployment documentation.
+
+After each milestone, report changes and test evidence.
+
+---
+
+# 18. NON-NEGOTIABLE DEVELOPMENT SAFETY RULES
+
+- Never rebuild the application from scratch.
+- Never delete existing working features.
+- Never overwrite user modifications.
+- Never modify historical audit entry #33.
+- Never reset or truncate the project database.
+- Never use Docker volume deletion.
+- Never execute migrations against the live project database without explicit approval.
+- Use disposable test databases and synthetic patient data.
+- Do not hardcode passwords, tokens, secrets, or private keys.
+- Do not disable security controls to make workflows succeed.
+- Do not introduce fake successful external integrations.
+- Do not report unverified integrations as completed.
+- Do not create commits or push code without permission.
+- Do not modify unrelated files.
+- Keep changes small, reviewable, and testable.
+
+If a required integration is unavailable, build the proper interface and document the limitation. Do not pretend the integration works.
+
+---
+
+# 19. DEFINITION OF SUCCESS
+
+HealthHarbor should eventually demonstrate this complete scenario:
+
+1. Hospital A applies to join HealthHarbor.
+2. Platform administrator verifies and approves Hospital A.
+3. Hospital A administrator creates or invites staff memberships.
+4. A doctor submits professional registration details.
+5. Professional eligibility is verified.
+6. Hospital A approves the doctor's affiliation.
+7. Doctor account becomes active.
+8. Patient registers and authenticates.
+9. Patient visits Hospital A.
+10. Doctor creates a prescription.
+11. Laboratory technician processes a laboratory request and publishes a report.
+12. Clinical records become discoverable by the patient.
+13. Patient later discovers a verified doctor at Hospital B.
+14. Patient initiates a consultation or relationship request.
+15. Doctor accepts the relationship.
+16. Doctor requests specific previous medical records.
+17. Patient grants resource-scoped consent.
+18. Hospital B retrieves the permitted records securely.
+19. Doctor reviews the previous prescription and laboratory report.
+20. The patient can inspect access history and revoke future access.
+21. Every important operation has appropriate audit and provenance records.
+22. Eligible blockchain events receive actual Fabric commit confirmation.
+
+The same patient must retain a consistent identity across participating organizations.
+
+Hospital B must not be able to access unrelated records or other patients' information.
+
+This workflow is the central acceptance criterion.
+
+---
+
+# 20. FINAL REPORTING REQUIREMENTS
+
+After every milestone, provide:
+
+1. What was inspected.
+2. What was implemented.
+3. Files changed.
+4. Database changes.
+5. API endpoints added or modified.
+6. Frontend workflows added.
+7. Security controls implemented.
+8. Tests executed.
+9. Actual test results.
+10. Unresolved issues.
+11. Environment limitations.
+12. Exact next milestone.
+
+Maintain the project documentation:
+
 - PROJECT_STATUS.md
 - IMPLEMENTATION_STATUS.md
-- ARCHITECTURE_REVIEW.md
-- COMPLETION_ROADMAP.md
 - SECURITY_ASSESSMENT.md
-- DEPLOYMENT_GUIDE.md
 - TESTING_REPORT.md
+- INTEGRATION_GUIDE.md
+- ARCHITECTURE_REVIEW.md
 
-Document exact commands, environment variables, service startup order, test results, and limitations.
+Keep documentation consistent with actual code and test evidence.
 
-Clearly distinguish:
+# STARTING INSTRUCTION
 
-- Implemented.
-- Unit tested.
-- Integration tested with mocks.
-- Verified against a real local service.
-- Not yet verified.
-- Deferred.
+Begin with Milestone 1 only.
 
-# 10. START NOW
+Inspect the existing repository and produce:
 
-Begin with PHASE 0.
+1. Current architecture assessment.
+2. Existing-to-new domain mapping.
+3. Database entity relationship proposal.
+4. Provider onboarding sequence.
+5. Organization onboarding sequence.
+6. Patient-provider relationship sequence.
+7. Cross-organization document-sharing sequence.
+8. API contract proposal.
+9. Security and authorization matrix.
+10. Incremental implementation plan.
 
-Inspect the actual repository and compare the source code against PROJECT_STATUS.md.
+Do not start implementing Milestones 2–9 until Milestone 1 has been presented for review.
 
-Then create/update the implementation documents and proceed with the highest-priority unfinished work.
-
-Do not stop after writing a plan.
-
-Your objective is to finish and verify the existing HealthHarbor system, not merely produce code that looks complete.
-
-At every stage, prioritize correctness, security, interoperability, maintainability, and demonstrable results.
+Your objective is to build HealthHarbor as a trustworthy healthcare information exchange network where patients remain in control of their medical records and verified healthcare professionals can securely collaborate across organizational boundaries.

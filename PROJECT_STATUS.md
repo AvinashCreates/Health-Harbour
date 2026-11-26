@@ -4,6 +4,42 @@ This status distinguishes code implemented and locally tested from external
 services that still require a real deployment. Mock tests do not establish
 production interoperability.
 
+## Latest end-to-end verification (2026-11-26)
+
+- The latest complete backend run passed **57 tests**, with one PostgreSQL-
+  only test skipped. The legacy API and security workflow scripts also passed
+  on separate isolated SQLite databases.
+- Fresh SQLite Alembic upgrade and `alembic check` passed through registry
+  revision `2a7f9c6d4e81_healthcare_registry`.
+- The PostgreSQL server default was `REPEATABLE READ`; the actual application
+  engine still reported `READ COMMITTED` after a prior query, and the
+  independent-process audit append regression passed. The same test also
+  passed with an effective `READ COMMITTED` database default. These tests
+  verified sequential linkage, recomputed hashes, appending after a synthetic
+  discontinuity, and rollback after a forced insert failure.
+- A prior frontend build passed before the registry page was added. The new
+  registry page build could not be run in this environment because Node.js
+  and npm are unavailable. Earlier Fabric module tests passed; they were not
+  rerun in this implementation pass.
+- Read-only requests to the running local API health endpoint and HAPI
+  metadata returned HTTP 200; HAPI reported FHIR R4 `4.0.1`. Keycloak OIDC
+  discovery timed out.
+- No migration or write was made to the existing project PostgreSQL database.
+  The known historical audit discontinuity at entry #33 remains untouched.
+- This is **partial academic-demo readiness**, not complete integration or
+  production readiness. Live Keycloak login, HAPI resource CRUD/workflows,
+  Fabric network commits, browser acceptance, ZAP, k6 performance measurement,
+  and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
+  and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
+
+## Current master-prompt milestone
+
+Milestone 2 organization/provider registry backend and React workflows are
+implemented in the worktree. The additive registry migration and API
+regressions passed on isolated SQLite; the new frontend build, disposable
+PostgreSQL registry migration, live Keycloak/HAPI/Fabric flows, and browser
+acceptance remain unverified. Milestones beyond the registry are not started.
+
 ## Application features
 
 ### Backend
@@ -51,10 +87,10 @@ production interoperability.
 
 | Requirement | Implementation | Verification status |
 |---|---|---|
-| Keycloak / OIDC | Realm export, PKCE browser client, RS256/JWKS signature validation, issuer/audience/expiry/subject checks, unambiguous role mapping, verified-email patient provisioning, and subject-based profile linking. | Signed-token tests pass, including missing audience and ambiguous-role rejection. Live Keycloak import, sign-in, refresh, and user provisioning remain unverified. |
-| HAPI FHIR R4 | Create/update/read paths use reference checks, `$validate`, conditional version updates, and authoritative HAPI reads. Compose sets the PostgreSQL Hibernate dialect directly with Spring application properties and disables contextual JDBC LOB creation. | Verified on the user's machine (2026-11-25): HAPI 7.4.0 completed startup, the `bt2_job_instance`, `trm_concept`, and `hfj_search` tables exist in PostgreSQL, metadata reports FHIR R4 `4.0.1`, and API health reports `fhir: hapi`. Live resource create/read/update and full workflow round trips remain unverified. |
-| Hyperledger Fabric | Go chaincode and HTTP Gateway adapter, explicit allowlisted append-only event types, transactional outbox with retry/backoff, keyed pseudonym references, payload hashes, and commit status only after Gateway confirmation. Deployment guidance describes a two-organization local test network with both peer organizations endorsing writes. | Python outbox tests pass, including rejection of unapproved event types and checks on the outbound field projection. Go tests could not run in this environment because Go is unavailable. User ran `go test ./...` successfully in both modules on 2026-11-25. A live Fabric network deployment and committed ledger event remain unverified. |
-| PostgreSQL / migrations | Alembic schema migrations and Compose startup upgrade; API `create_all` is disabled for PostgreSQL. Compose also mounts a persistent volume for clinical file bytes. | User-provided Compose output (2026-11-25) showed PostgreSQL healthy, backend running, and API health confirming database connectivity. Backup/restore and failure-recovery procedures remain untested. |
+| Keycloak / OIDC | Realm export, PKCE browser client, RS256/JWKS signature validation, issuer/audience/expiry/subject checks, unambiguous role mapping, verified-email patient provisioning, and subject-based profile linking. | Signed-token tests pass, including missing audience and ambiguous-role rejection. Live discovery timed out in this verification; Keycloak import, browser sign-in, refresh, and user provisioning remain unverified. |
+| HAPI FHIR R4 | Create/update/read paths use reference checks, `$validate`, conditional version updates, and authoritative HAPI reads. Compose sets the PostgreSQL Hibernate dialect directly with Spring application properties and disables contextual JDBC LOB creation. | Read-only HAPI metadata returned HTTP 200 and FHIR R4 `4.0.1`; prior user-provided evidence also confirmed HAPI 7.4.0 startup and backend readiness. Live resource create/read/update and full workflow round trips remain unverified. |
+| Hyperledger Fabric | Go chaincode and HTTP Gateway adapter, explicit allowlisted append-only event types, transactional outbox with retry/backoff, keyed pseudonym references, payload hashes, and commit status only after Gateway confirmation. Deployment guidance describes a two-organization local test network with both peer organizations endorsing writes. | Python outbox tests pass. `go test ./...` and `go vet ./...` passed in both Go modules in this verification. A live Fabric network deployment and committed ledger event remain unverified. |
+| PostgreSQL / migrations | Alembic schema migrations and Compose startup upgrade; API `create_all` is disabled for PostgreSQL. Compose also mounts a persistent volume for clinical file bytes. | Full upgrade and `alembic check` passed on a disposable PostgreSQL 16.11 database; audit concurrency regression passed under both server/database isolation defaults. No migration or write was made to the existing project database. Backup/restore and failure-recovery procedures remain untested. |
 | OWASP ZAP | Passive baseline scan runner restricted to loopback targets. | Runner syntax and non-loopback refusal checked; Docker and a live local API were unavailable, so no scan was run. |
 | k6 load testing | Current-stack ramping test with optional authenticated reads and JSON summary export, restricted to loopback targets. | Runner syntax and non-loopback refusal checked; Docker/k6 and a live API were unavailable, so no load results were produced. |
 

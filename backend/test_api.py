@@ -56,6 +56,57 @@ def add_lab_membership(lab_id, technician_id, actor_id):
     db.close()
 
 
+def add_registry_eligibility(doctor_ids, laboratory_ids):
+    db = SessionLocal()
+    try:
+        organization = models.HealthcareOrganization(
+            legal_name="Synthetic Test Hospital",
+            display_name="Synthetic Test Hospital",
+            organization_type="HOSPITAL",
+            administrative_contact_name="Synthetic Administrator",
+            administrative_contact_email="registry@example.test",
+            status="APPROVED",
+        )
+        db.add(organization)
+        for laboratory_id in laboratory_ids:
+            laboratory = db.query(models.User).filter(
+                models.User.id == laboratory_id,
+            ).one()
+            db.add(models.HealthcareOrganization(
+                legacy_user_id=laboratory.id,
+                legal_name=f"Synthetic {laboratory.full_name}",
+                display_name=laboratory.full_name,
+                organization_type="DIAGNOSTIC_LABORATORY",
+                administrative_contact_name="Synthetic Administrator",
+                administrative_contact_email="registry@example.test",
+                status="APPROVED",
+            ))
+        db.flush()
+        for doctor_id in doctor_ids:
+            doctor = db.query(models.User).filter(models.User.id == doctor_id).one()
+            provider = models.HealthcareProvider(
+                account_id=doctor.id,
+                professional_name=doctor.full_name,
+                registration_authority="synthetic-test-authority",
+                registration_number=f"TEST-{doctor.id}",
+                qualifications=["Synthetic test qualification"],
+                status="VERIFIED",
+            )
+            db.add(provider)
+            db.flush()
+            db.add(models.OrganizationAffiliation(
+                organization_id=organization.id,
+                provider_id=provider.id,
+                account_id=doctor.id,
+                organization_role="PROVIDER",
+                status="ACTIVE",
+                invited_by_id=doctor_id,
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+
 # 1. Register four roles
 r = client.post("/auth/register", json={"full_name": "Test Patient", "email": "qa.patient@example.com", "password": "TestPassword@123"})
 check("register patient -> 200", r.status_code == 200)
@@ -71,6 +122,10 @@ technician = provision_test_user("Test Technician", "qa.technician@example.com",
 unaffiliated_technician = provision_test_user("Unassigned Technician", "qa.unassigned@example.com", "lab_technician")
 admin = provision_test_user("Test Admin", "qa.admin@example.com", "admin")
 add_lab_membership(lab["user"]["id"], technician["user"]["id"], admin["user"]["id"])
+add_registry_eligibility(
+    [doctorA["user"]["id"], doctorB["user"]["id"]],
+    [lab["user"]["id"], other_lab["user"]["id"]],
+)
 
 # 2. Duplicate email rejected
 r = client.post("/auth/register", json={"full_name": "Dup", "email": "qa.patient@example.com", "password": "TestPassword@123"})

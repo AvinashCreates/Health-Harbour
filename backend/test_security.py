@@ -142,6 +142,36 @@ check("admin cannot list clinical reports -> 403", r.status_code == 403)
 #     or touch the database structurally (SQLAlchemy ORM parameterizes
 #     everything, so this should just be stored as an inert string) ---
 injection_doctor = register("sec.injector@example.com", "doctor")
+registry_db = SessionLocal()
+registry_organization = models.HealthcareOrganization(
+    legal_name="Synthetic Security Test Hospital",
+    display_name="Synthetic Security Test Hospital",
+    organization_type="HOSPITAL",
+    administrative_contact_name="Synthetic Administrator",
+    administrative_contact_email="registry@example.test",
+    status="APPROVED",
+)
+registry_db.add(registry_organization)
+injection_profile = models.HealthcareProvider(
+    account_id=injection_doctor["user"]["id"],
+    professional_name="Sec Test",
+    registration_authority="synthetic-test-authority",
+    registration_number=f"TEST-{injection_doctor['user']['id']}",
+    qualifications=["Synthetic test qualification"],
+    status="VERIFIED",
+)
+registry_db.add(injection_profile)
+registry_db.flush()
+registry_db.add(models.OrganizationAffiliation(
+    organization_id=registry_organization.id,
+    provider_id=injection_profile.id,
+    account_id=injection_doctor["user"]["id"],
+    organization_role="PROVIDER",
+    status="ACTIVE",
+    invited_by_id=admin["user"]["id"],
+))
+registry_db.commit()
+registry_db.close()
 # give this doctor consent so the ServiceRequest call reaches the field we're
 # attacking rather than failing earlier on a 403
 client.post("/consent/grant", json={
