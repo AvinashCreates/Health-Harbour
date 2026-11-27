@@ -13,6 +13,7 @@ from database import get_db
 from deps import get_current_user, require_roles
 from services import audit_logger, fhir_builder
 from services.consent_access import consented_patient_ids, has_active_consent
+from services.fhir_sync import queue_fhir_resource
 from services.fhir_server import (
     authoritative_resource,
     persist_resource,
@@ -285,6 +286,7 @@ def create_service_request(
     )
     db.add(record)
     db.flush()
+    queue_fhir_resource(db, "ServiceRequest", fhir_id, resource_data)
     workflow = models.LaboratoryWorkflow(
         service_request_id=record.id,
         patient_id=patient.id,
@@ -452,6 +454,7 @@ def register_specimen(
         owner_id=workflow.patient_id,
         created_by=current_user.id,
     ))
+    queue_fhir_resource(db, "Specimen", specimen_id, specimen_data)
     workflow.specimen_fhir_id = specimen_id
     db.commit()
     _transition(db, workflow, current_user.id, "SPECIMEN_REGISTERED")
@@ -504,6 +507,7 @@ def submit_results(
             owner_id=workflow.patient_id,
             created_by=current_user.id,
         ))
+        queue_fhir_resource(db, "Observation", observation_id, observation_data)
         observation_ids.append(observation_id)
 
     report_id = str(uuid.uuid4())
@@ -526,6 +530,7 @@ def submit_results(
         owner_id=workflow.patient_id,
         created_by=current_user.id,
     ))
+    queue_fhir_resource(db, "DiagnosticReport", report_id, report_data)
     workflow.report_fhir_id = report_id
     db.commit()
     _transition(db, workflow, current_user.id, "RESULTS_SUBMITTED")
@@ -555,6 +560,7 @@ def finalize_report(
     report_data["issued"] = fhir_builder.now_iso()
     report_data = persist_resource(report_data)
     report.resource_data = report_data
+    queue_fhir_resource(db, "DiagnosticReport", report.fhir_id, report_data)
     workflow.reviewer_id = current_user.id
     db.commit()
     _transition(db, workflow, current_user.id, "FINALIZED")

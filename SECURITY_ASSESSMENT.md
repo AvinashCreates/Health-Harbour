@@ -114,6 +114,22 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 6 FHIR interoperability security (2026-11-27)
+
+- FHIR synchronization is a durable application-state mirror, not an authorization
+  source. Stable resource IDs use application IDs and documented identifier
+  systems; retry payloads are deduplicated by resource type and ID.
+- Admin-only endpoints expose sync status, worker processing, and reconciliation.
+  Reconciliation reports discrepancies but does not silently overwrite HAPI or
+  application state.
+- PractitionerRole references point to the provider and organization domain IDs;
+  application verification and affiliation checks remain authoritative.
+- Direct HAPI access is not exposed by this application. HAPI resource visibility
+  does not bypass consent, ownership, suspension, affiliation, or document
+  download checks.
+- Live HAPI validation, search, create/read/update, direct Binary access, and
+  cross-tenant retrieval remain NOT VERIFIED.
+
 ## Milestone 5 security hardening (2026-11-27)
 
 - Clinical documents can be encrypted at rest with AES-256-GCM. Storage uses

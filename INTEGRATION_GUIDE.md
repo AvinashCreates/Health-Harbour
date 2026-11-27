@@ -159,9 +159,10 @@ database.
 
 ## Readiness boundary
 
-Milestone 5 encryption/scanner tests and combined backend/API suites pass on
-isolated SQLite. Milestone 5 added AES-256-GCM storage and explicit scan states.
-The current SQLite migration chain passed through `a31e7c9d2f10`.
+Milestone 6 FHIR mapping/outbox tests and combined backend/API suites pass on
+isolated SQLite. The migration chain passes through `c7f3a9d1e4b2` and
+`alembic check` reports no drift. Live HAPI create/read/update/search,
+disposable PostgreSQL migration, and browser acceptance remain unverified.
 Earlier frontend build, Go module, disposable PostgreSQL migration, and
 two-process audit append results are recorded in [TESTING_REPORT.md](./TESTING_REPORT.md).
 The new Registry workspace could not be built here because Node.js/npm were

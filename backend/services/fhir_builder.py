@@ -30,6 +30,68 @@ def build_practitioner(user) -> dict:
     }
 
 
+def build_healthcare_practitioner(provider, account) -> dict:
+    resource = {
+        "resourceType": "Practitioner",
+        "id": provider.fhir_resource_id or provider.id,
+        "identifier": [{
+            "system": "urn:healthharbor:provider",
+            "value": provider.id,
+        }],
+        "active": provider.status == "VERIFIED",
+        "name": [{"text": provider.professional_name or account.full_name}],
+    }
+    if provider.registration_authority or provider.registration_number:
+        identifiers = []
+        if provider.registration_authority:
+            identifiers.append({"system": "urn:healthharbor:registration-authority", "value": provider.registration_authority})
+        if provider.registration_number:
+            identifiers.append({"system": "urn:healthharbor:registration-number", "value": provider.registration_number})
+        resource["identifier"].extend(identifiers)
+    if provider.specialization:
+        resource["qualification"] = [{"code": {"text": provider.specialization}}]
+    return resource
+
+
+def build_healthcare_organization(organization) -> dict:
+    identifiers = [{"system": "urn:healthharbor:organization", "value": organization.id}]
+    if organization.registration_authority or organization.registration_identifier:
+        if organization.registration_authority:
+            identifiers.append({"system": "urn:healthharbor:registration-authority", "value": organization.registration_authority})
+        if organization.registration_identifier:
+            identifiers.append({"system": "urn:healthharbor:registration-number", "value": organization.registration_identifier})
+    resource = {
+        "resourceType": "Organization",
+        "id": organization.fhir_resource_id or organization.id,
+        "identifier": identifiers,
+        "active": organization.status == "APPROVED",
+        "name": organization.display_name or organization.legal_name,
+    }
+    if organization.address:
+        resource["address"] = [{"text": " ".join(str(value) for value in organization.address.values())}]
+    return resource
+
+
+def build_practitioner_role(affiliation, provider, organization) -> dict:
+    resource = {
+        "resourceType": "PractitionerRole",
+        "id": affiliation.id,
+        "identifier": [{"system": "urn:healthharbor:affiliation", "value": affiliation.id}],
+        "active": affiliation.status == "ACTIVE",
+        "practitioner": {"reference": f"Practitioner/{provider.fhir_resource_id or provider.id}"},
+        "organization": {"reference": f"Organization/{organization.fhir_resource_id or organization.id}"},
+        "code": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/practitioner-role", "code": "provider", "display": "Provider"}]}],
+    }
+    period = {}
+    if affiliation.effective_from:
+        period["start"] = affiliation.effective_from.isoformat()
+    if affiliation.effective_until:
+        period["end"] = affiliation.effective_until.isoformat()
+    if period:
+        resource["period"] = period
+    return resource
+
+
 def build_organization(user) -> dict:
     return {
         "resourceType": "Organization",
@@ -187,7 +249,7 @@ def build_consent(
             }],
             "code": [{
                 "coding": [{
-                    "system": "urn:wirachain:consent-resource-type",
+                    "system": "urn:healthharbor:consent-resource-type",
                     "code": resource_type,
                     "display": resource_type,
                 }],

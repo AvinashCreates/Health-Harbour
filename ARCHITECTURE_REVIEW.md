@@ -61,8 +61,8 @@ preserved and not normalized or reverted.
    private directory/file modes, and no exposed storage paths. When explicitly
    required, AES-256-GCM stores a framed ciphertext with a 96-bit nonce and
    key metadata. Existing plaintext records are left unchanged and explicitly
-   classified as legacy storage.
-   not in PostgreSQL or Fabric. The database stores metadata and a digest.
+   classified as legacy storage. The database stores metadata and a digest;
+   clinical bytes are not stored in Fabric.
 7. `services/audit_logger.py` maintains the application hash chain. It is
    separate from the Fabric ledger and does not repair historical records.
 8. The healthcare registry uses independent `HealthcareOrganization`,
@@ -70,6 +70,10 @@ preserved and not normalized or reverted.
    affiliation tables. `backend/routers/registry.py` exposes the `/api/v1`
    workflows; mutable verification and affiliation status is checked from
    PostgreSQL/SQLite-backed application state, not trusted JWT claims.
+9. `services/fhir_sync.py` stores stable FHIR resource synchronization events
+   in a dedicated outbox, with payload hashes and bounded retry state. HAPI
+   synchronization is never used as an authorization source. Live HAPI create,
+   read, search, update, and reconciliation remain unverified.
 
 ## Identity and authorization
 

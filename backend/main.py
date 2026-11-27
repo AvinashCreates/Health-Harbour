@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 import models  # noqa: F401  (registers models on Base before create_all)
 from database import Base, DATABASE_URL, engine, get_db
-from routers import audit, auth, care, consent, files, fhir, registry
+from routers import audit, auth, care, consent, files, fhir, fhir_sync, registry
 from services.fhir_server import FHIRIntegrationError, check_r4_server
 from services.ledger import ledger_enabled, process_pending_events
 
@@ -114,6 +114,7 @@ app.include_router(files.router)
 app.include_router(audit.router)
 app.include_router(registry.router)
 app.include_router(care.router)
+app.include_router(fhir_sync.router)
 
 
 @app.get("/")

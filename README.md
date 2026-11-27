@@ -309,6 +309,14 @@ startup checks passed on the user's machine on 2026-11-25. FHIR resource
 create/read/update operations still need to pass before end-to-end
 interoperability is considered tested.
 
+A durable `fhir_sync_outbox` queues stable FHIR resource payloads with payload
+hashes, retry state, and reconciliation visibility. Admin endpoints report and
+process synchronization state under `/api/v1/admin/fhir/sync`. The application
+database remains authoritative for ownership and authorization; HAPI visibility
+never grants access. Local/FHIR mirror tests pass, but live HAPI create/read/
+update/search and reconciliation remain unverified until a disposable HAPI
+server is available.
+
 ### Hyperledger Fabric
 
 Chaincode, a commit-confirming Gateway adapter, and setup instructions are in

@@ -23,6 +23,7 @@ from services.document_storage import (
     get_document_storage,
 )
 from services.document_scanner import get_document_scanner
+from services.fhir_sync import queue_fhir_resource
 
 router = APIRouter(prefix="/files", tags=["clinical files"])
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ def _metadata(
     user: models.User,
     workflow: models.LaboratoryWorkflow | None = None,
     users_by_id: dict[str, models.User] | None = None,
+    sync_status_by_id: dict[str, str] | None = None,
 ) -> dict:
     if users_by_id is None:
         patient = db.query(models.User).filter(models.User.id == file_record.patient_id).first()
@@ -105,6 +107,14 @@ def _metadata(
     else:
         patient = users_by_id.get(file_record.patient_id)
         uploader = users_by_id.get(file_record.uploaded_by_id)
+    if sync_status_by_id is not None:
+        fhir_sync_status = sync_status_by_id.get(file_record.id, "NOT_QUEUED")
+    else:
+        sync_event = db.query(models.FHIRSyncOutbox).filter(
+            models.FHIRSyncOutbox.resource_type == "DocumentReference",
+            models.FHIRSyncOutbox.resource_id == file_record.id,
+        ).first()
+        fhir_sync_status = sync_event.status if sync_event else "NOT_QUEUED"
     return {
         "id": file_record.id,
         "patient_id": file_record.patient_id,
@@ -123,6 +133,7 @@ def _metadata(
         "scan_status": getattr(file_record, "scan_status", "NOT_REQUIRED"),
         "scan_detail": getattr(file_record, "scan_detail", None),
         "encryption": "AES-256-GCM-v1" if getattr(file_record, "encryption_version", None) else "UNENCRYPTED_LEGACY",
+        "fhir_sync_status": fhir_sync_status,
         "can_delete": user.role == "patient" and file_record.patient_id == user.id,
     }
 
@@ -307,6 +318,13 @@ def list_files(
             for workflow in workflows.all()
         }
 
+    sync_status_by_id = {
+        event.resource_id: event.status
+        for event in db.query(models.FHIRSyncOutbox).filter(
+            models.FHIRSyncOutbox.resource_type == "DocumentReference",
+            models.FHIRSyncOutbox.resource_id.in_([file_record.id for file_record in files]),
+        ).all()
+    }
     result = []
     for file_record in files:
         workflow = workflows_by_file.get(
@@ -320,6 +338,7 @@ def list_files(
             current_user,
             workflow,
             users_by_id,
+            sync_status_by_id,
         ))
     return result
 
@@ -499,6 +518,7 @@ async def upload_file(
             owner_id=patient.id,
             created_by=current_user.id,
         ))
+        queue_fhir_resource(db, "DocumentReference", file_id, persisted_reference)
         db.commit()
         db.refresh(file_record)
     except Exception:
@@ -616,6 +636,7 @@ def delete_file(
         raise
     file_record.deleted_at = datetime.utcnow()
     document_row.resource_data = persisted_reference
+    queue_fhir_resource(db, "DocumentReference", file_record.id, persisted_reference)
     try:
         db.commit()
     except Exception:

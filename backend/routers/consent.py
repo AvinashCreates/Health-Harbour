@@ -12,6 +12,7 @@ from services import fhir_builder
 from services.fhir_server import authoritative_resource, fhir_mode, persist_resource
 from services.consent_access import consent_is_active
 from services.registry import provider_has_active_affiliation
+from services.fhir_sync import queue_fhir_resource
 
 router = APIRouter(prefix="/consent", tags=["consent"])
 
@@ -95,6 +96,7 @@ def grant_consent(payload: schemas.ConsentGrant, db: Session = Depends(get_db), 
         purpose=consent.purpose,
     )
     persist_resource(fhir_consent)
+    queue_fhir_resource(db, "Consent", consent.id, fhir_consent)
     db.commit()
     db.refresh(consent)
 
@@ -217,6 +219,7 @@ def revoke_consent(consent_id: str, db: Session = Depends(get_db), current_user:
             )
         fhir_consent["status"] = "inactive"
         persist_resource(fhir_consent)
+        queue_fhir_resource(db, "Consent", consent.id, fhir_consent)
         db.commit()
         db.refresh(consent)
         audit_logger.log_event(db, current_user.id, "CONSENT_REVOKED", {

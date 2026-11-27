@@ -22,6 +22,23 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 6 FHIR interoperability
+
+- Added `FHIRSyncOutbox` and migration `c7f3a9d1e4b2` with stable resource
+  keys, payload hashes, attempt counts, retry times, error categories, and sync
+  timestamps.
+- Added queue, local mirror processing, bounded retry, permanent-failure, and
+  reconciliation services.
+- Added admin FHIR sync status, process, and reconcile endpoints.
+- Added FHIR mappers for registry Practitioner, Organization, and
+  PractitionerRole resources. Existing Patient, Consent, DocumentReference,
+  ServiceRequest, Specimen, Observation, and DiagnosticReport mappers remain.
+- Document uploads, consent decisions, registry decisions, affiliation changes,
+  and clinical workflow resources queue stable FHIR synchronization records.
+- Files metadata now returns bounded FHIR sync status to the frontend.
+- Live HAPI persistence/retrieval and disposable PostgreSQL migration remain
+  not verified. Direct HAPI endpoints do not replace application authorization.
+
 ## Milestone 5 security hardening
 
 - Added additive migration `a31e7c9d2f10` for processing, scan, encryption

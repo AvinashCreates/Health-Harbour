@@ -32,6 +32,20 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 6 FHIR interoperability status
+
+Milestone 6 adds a durable FHIR synchronization outbox, stable resource payload
+keys, local FHIR mirror processing, retry/permanent-failure state, reconciliation
+visibility, and admin API status controls. Resource mappers now cover healthcare
+practitioner, organization, and affiliation PractitionerRole resources. Existing
+Patient, ServiceRequest, Observation, DiagnosticReport, Specimen, Consent, and
+DocumentReference mappings remain in use.
+
+Live HAPI create/read/update/search and reference validation are not claimed.
+HAPI remains explicitly unverified, while local outbox and mirror behavior are
+tested. Live PostgreSQL, browser acceptance, and Fabric confirmation also remain
+outstanding.
+
 ## Milestone 5 security hardening status
 
 Milestone 5 adds opt-in AES-256-GCM document encryption, safe key validation,

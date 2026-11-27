@@ -10,6 +10,8 @@ from database import get_db
 from deps import get_current_user, require_roles
 from services import audit_logger
 from services.registry import add_affiliation_event, require_organization_admin
+from services import fhir_builder
+from services.fhir_sync import queue_fhir_resource
 
 router = APIRouter(prefix="/api/v1", tags=["healthcare registry"])
 
@@ -344,6 +346,7 @@ def decide_organization_application(
         decision=decision,
         reason=payload.reason,
     ))
+    queue_fhir_resource(db, "Organization", organization.fhir_resource_id or organization.id, fhir_builder.build_healthcare_organization(organization))
     audit_logger.log_event(db, current_user.id, f"ORGANIZATION_{decision}", {
         "organization_id": organization.id,
         "application_id": application.id,
@@ -598,6 +601,9 @@ def decide_provider_application(
         source=None,
         reason=payload.reason,
     ))
+    provider_account = db.query(models.User).filter(models.User.id == provider.account_id).first()
+    if provider_account:
+        queue_fhir_resource(db, "Practitioner", provider.fhir_resource_id or provider.id, fhir_builder.build_healthcare_practitioner(provider, provider_account))
     audit_logger.log_event(db, current_user.id, f"PROVIDER_{decision}", {
         "provider_id": provider.id,
         "application_id": application.id,
@@ -1048,6 +1054,10 @@ def decide_affiliation(
     affiliation.decision_reason = payload.reason
     affiliation.updated_at = datetime.utcnow()
     add_affiliation_event(db, affiliation, current_user.id, previous, affiliation.status, payload.reason)
+    organization = db.query(models.HealthcareOrganization).filter(models.HealthcareOrganization.id == organization_id).first()
+    provider = db.query(models.HealthcareProvider).filter(models.HealthcareProvider.id == affiliation.provider_id).first()
+    if organization and provider:
+        queue_fhir_resource(db, "PractitionerRole", affiliation.id, fhir_builder.build_practitioner_role(affiliation, provider, organization))
     audit_logger.log_event(db, current_user.id, f"ORGANIZATION_AFFILIATION_{affiliation.status}", {
         "organization_id": organization_id,
         "provider_id": affiliation.provider_id,

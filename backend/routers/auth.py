@@ -15,6 +15,7 @@ from deps import get_current_user, oauth2_scheme, require_roles, verify_keycloak
 from services import audit_logger, fhir_builder
 from services.fhir_server import persist_resource
 from services.oidc import map_keycloak_role
+from services.fhir_sync import queue_fhir_resource
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -263,6 +264,7 @@ def _create_account(db: Session, payload, role: str, issue_token: bool = True):
             resource_type=resource_type, fhir_id=user.id, resource_data=resource_data,
             owner_id=user.id, created_by=user.id,
         ))
+        queue_fhir_resource(db, resource_type, user.id, builder(user))
     db.commit()
     db.refresh(user)
 

@@ -1,5 +1,18 @@
 # Testing report
 
+## Latest Milestone 6 verification (2026-11-27)
+
+- Focused FHIR sync tests: **5 passed**. Coverage includes stable queue keys,
+  local mirror synchronization, repeated updates, identity and PractitionerRole
+  mapping, permanent HAPI errors, and reconciliation status.
+- Complete targeted backend suite: **71 passed, 1 PostgreSQL-only test skipped**.
+- `test_api.py` and `test_security.py` passed as separate smoke scripts.
+- Fresh SQLite migration through `c7f3a9d1e4b2_fhir_sync_outbox` passed and
+  `alembic check` reported no drift.
+- Live HAPI persistence/retrieval, disposable PostgreSQL migration, Node/npm
+  build, browser acceptance, and live Fabric confirmation remain NOT VERIFIED.
+
+
 ## Latest Milestone 5 verification (2026-11-27)
 
 - AES-GCM encryption tests: 5 passed. Coverage includes round trips, unique

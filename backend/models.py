@@ -184,6 +184,31 @@ class LedgerOutbox(Base):
     committed_at = Column(DateTime, nullable=True)
 
 
+class FHIRSyncOutbox(Base):
+    __tablename__ = "fhir_sync_outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'SYNCED', 'FAILED', 'PERMANENT_FAILED')",
+            name="ck_fhir_sync_status",
+        ),
+        UniqueConstraint("resource_type", "resource_id", name="uq_fhir_sync_resource"),
+        Index("ix_fhir_sync_status_next_attempt", "status", "next_attempt_at"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    resource_type = Column(String(64), nullable=False, index=True)
+    resource_id = Column(String, nullable=False, index=True)
+    resource_payload = Column(JSON, nullable=False)
+    payload_hash = Column(String(64), nullable=False, index=True)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    last_error = Column(String(500), nullable=True)
+    last_error_category = Column(String(64), nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AuditLog(Base):
     """Append-only, hash-chained event log. Each row's curr_hash commits to
     the previous row's hash plus this row's content, so altering any past

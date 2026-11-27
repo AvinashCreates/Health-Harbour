@@ -194,6 +194,28 @@ def persist_resource(resource: dict[str, Any]) -> dict[str, Any]:
         raise FHIRIntegrationError("HAPI FHIR returned a non-JSON response") from exc
 
 
+def search_resources(resource_type: str, query: dict[str, str]) -> list[dict[str, Any]]:
+    if fhir_mode() == "local":
+        return []
+    try:
+        with _client() as client:
+            response = client.get(
+                f"{_base_url()}/{resource_type}",
+                params=query,
+            )
+            _raise_for_fhir_error(response, "resource search")
+            bundle = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise FHIRIntegrationError("Unable to search FHIR resources") from exc
+    if not isinstance(bundle, dict) or bundle.get("resourceType") != "Bundle":
+        raise FHIRIntegrationError("FHIR search returned an invalid Bundle")
+    return [
+        entry.get("resource")
+        for entry in bundle.get("entry", [])
+        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
+    ]
+
+
 def retrieve_resource(resource_type: str, resource_id: str) -> dict[str, Any] | None:
     if fhir_mode() == "local":
         return None
