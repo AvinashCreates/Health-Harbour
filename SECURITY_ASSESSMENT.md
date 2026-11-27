@@ -114,6 +114,20 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 10 clinical workflow findings (2026-11-27)
+
+- Prescription creation requires verified provider eligibility and patient
+  MedicationRequest consent. Other providers cannot transition or modify a
+  prescription they do not own.
+- Clinical review creation requires verified provider eligibility and patient
+  DiagnosticReport consent, and report/order references must belong to the
+  patient.
+- DiagnosticReport amendments are restricted to the responsible laboratory
+  organization and only finalized or physician-reviewed states.
+- Prescription and review APIs remain covered by the existing authentication,
+  role, ownership, and consent checks. Live clinical medication and laboratory
+  integrations remain unverified.
+
 ## Milestone 7.2 validation findings (2026-11-27)
 
 - Cross-hospital consent is rechecked immediately before document metadata,

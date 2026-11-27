@@ -520,6 +520,82 @@ class CareConnection(Base):
     closed_at = Column(DateTime, nullable=True)
 
 
+class Prescription(Base):
+    __tablename__ = "prescriptions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('DRAFT', 'ACTIVE', 'CANCELLED', 'COMPLETED', 'STOPPED')",
+            name="ck_prescription_status",
+        ),
+        Index("ix_prescription_patient_status", "patient_id", "status"),
+        Index("ix_prescription_provider_status", "provider_id", "status"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    patient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    medication_name = Column(String(200), nullable=False)
+    dosage = Column(String(120), nullable=False)
+    route = Column(String(80), nullable=True)
+    frequency = Column(String(120), nullable=False)
+    duration = Column(String(120), nullable=True)
+    quantity = Column(String(120), nullable=True)
+    instructions = Column(String(1000), nullable=True)
+    status = Column(String(24), nullable=False, default="DRAFT", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class PrescriptionHistory(Base):
+    __tablename__ = "prescription_history"
+    __table_args__ = (
+        CheckConstraint(
+            "to_status IN ('DRAFT', 'ACTIVE', 'CANCELLED', 'COMPLETED', 'STOPPED')",
+            name="ck_prescription_history_status",
+        ),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    prescription_id = Column(String, ForeignKey("prescriptions.id"), nullable=False, index=True)
+    actor_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    from_status = Column(String(24), nullable=True)
+    to_status = Column(String(24), nullable=False)
+    reason = Column(String(1000), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LaboratoryReportAmendment(Base):
+    __tablename__ = "laboratory_report_amendments"
+    id = Column(String, primary_key=True, default=gen_uuid)
+    report_id = Column(String, ForeignKey("fhir_resources.id"), nullable=False, index=True)
+    actor_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    previous_conclusion = Column(String(2000), nullable=True)
+    conclusion = Column(String(2000), nullable=False)
+    reason = Column(String(1000), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PhysicianClinicalReview(Base):
+    __tablename__ = "physician_clinical_reviews"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'REVIEWED', 'FOLLOW_UP_REQUIRED')",
+            name="ck_physician_clinical_review_status",
+        ),
+        Index("ix_clinical_review_patient_status", "patient_id", "status"),
+        Index("ix_clinical_review_provider_status", "provider_id", "status"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    patient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    diagnostic_report_id = Column(String, ForeignKey("fhir_resources.id"), nullable=True, index=True)
+    service_request_id = Column(String, ForeignKey("fhir_resources.id"), nullable=True, index=True)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    clinical_note = Column(String(2000), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class ProviderRecordRequest(Base):
     __tablename__ = "provider_record_requests"
     __table_args__ = (

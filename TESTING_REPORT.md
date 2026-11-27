@@ -1,5 +1,23 @@
 # Testing report
 
+## Latest Milestone 10 clinical-workflow verification (2026-11-27)
+
+- Added two focused clinical workflow tests covering prescription lifecycle,
+  cross-patient denial, consent-gated review, and resource-link validation.
+- Focused clinical/integration/audit suite: **23 tests passed, 1 PostgreSQL-only
+  audit test skipped**.
+- Complete relevant backend suite: **79 tests passed, 1 PostgreSQL-only audit
+  test skipped**.
+- `test_api.py` and `test_security.py` passed on separate disposable SQLite
+  databases.
+- Alembic upgrade through `e8d1a4c7b2f5_clinical_prescriptions_reviews` passed
+  and `alembic check` reported no drift.
+- Python compilation and `git diff --check` passed.
+- Frontend static diagnostics reported no errors for modified React files.
+- Node/npm and browser automation remain unavailable, and live PostgreSQL,
+  HAPI, Fabric, and ClamAV integrations remain unverified.
+
+
 ## Milestone 7.2 local concurrency and recovery validation (2026-11-27)
 
 - Focused cross-hospital and FHIR recovery tests passed: **7 tests**.

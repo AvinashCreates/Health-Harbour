@@ -87,6 +87,12 @@ class DiagnosticReportCreate(BaseModel):
     conclusion: str = Field(min_length=1, max_length=2000)
 
 
+class DiagnosticReportAmendment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conclusion: str = Field(min_length=1, max_length=2000)
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
 class TechnicianAssignment(BaseModel):
     technician_email: EmailStr
 
@@ -359,6 +365,72 @@ class CrossOrganizationDocumentImportOut(BaseModel):
     status: str
     failure_reason: str | None
     imported_at: datetime | None
+    created_at: datetime
+
+
+class PrescriptionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    patient_id: str = Field(min_length=1, max_length=64)
+    organization_id: str = Field(min_length=1, max_length=64)
+    medication_name: str = Field(min_length=2, max_length=200, strip_whitespace=True)
+    dosage: str = Field(min_length=1, max_length=120, strip_whitespace=True)
+    route: str | None = Field(default=None, max_length=80, strip_whitespace=True)
+    frequency: str = Field(min_length=1, max_length=120, strip_whitespace=True)
+    duration: str | None = Field(default=None, max_length=120, strip_whitespace=True)
+    quantity: str | None = Field(default=None, max_length=120, strip_whitespace=True)
+    instructions: str | None = Field(default=None, max_length=1000, strip_whitespace=True)
+    activate: bool = True
+
+
+class PrescriptionTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["ACTIVE", "CANCELLED", "COMPLETED", "STOPPED"]
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class PrescriptionOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    provider_id: str
+    provider_name: str
+    organization_id: str
+    organization_name: str
+    medication_name: str
+    dosage: str
+    route: str | None
+    frequency: str
+    duration: str | None
+    quantity: str | None
+    instructions: str | None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PhysicianClinicalReviewCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    patient_id: str = Field(min_length=1, max_length=64)
+    organization_id: str = Field(min_length=1, max_length=64)
+    diagnostic_report_id: str | None = Field(default=None, max_length=64)
+    service_request_id: str | None = Field(default=None, max_length=64)
+    status: Literal["REVIEWED", "FOLLOW_UP_REQUIRED"]
+    clinical_note: str | None = Field(default=None, max_length=2000, strip_whitespace=True)
+
+
+class PhysicianClinicalReviewOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    provider_id: str
+    provider_name: str
+    organization_id: str
+    organization_name: str
+    diagnostic_report_id: str | None
+    service_request_id: str | None
+    status: str
+    clinical_note: str | None
+    reviewed_at: datetime | None
     created_at: datetime
 
 

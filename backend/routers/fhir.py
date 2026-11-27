@@ -572,6 +572,56 @@ def finalize_report(
     return {"status": workflow.status, "resource": report_data}
 
 
+@router.post("/DiagnosticReport/{report_id}/amend")
+def amend_diagnostic_report(
+    report_id: str,
+    payload: schemas.DiagnosticReportAmendment,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_roles("lab", "lab_supervisor")),
+):
+    workflow = db.query(models.LaboratoryWorkflow).filter(
+        models.LaboratoryWorkflow.report_fhir_id == report_id,
+    ).first()
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="Diagnostic report not found")
+    _require_laboratory(workflow, current_user)
+    if workflow.status not in {"FINALIZED", "PHYSICIAN_REVIEWED"}:
+        raise HTTPException(status_code=409, detail="Only finalized or reviewed reports can be amended")
+    report = db.query(models.FHIRResource).filter(
+        models.FHIRResource.resource_type == "DiagnosticReport",
+        models.FHIRResource.fhir_id == report_id,
+        models.FHIRResource.owner_id == workflow.patient_id,
+    ).first()
+    if report is None:
+        raise HTTPException(status_code=404, detail="Diagnostic report not found")
+
+    previous = dict(authoritative_resource("DiagnosticReport", report.fhir_id, report.resource_data))
+    previous_conclusion = previous.get("conclusion")
+    amended = dict(previous)
+    amended["status"] = "amended"
+    amended["conclusion"] = payload.conclusion
+    amended["issued"] = fhir_builder.now_iso()
+    persisted = persist_resource(amended)
+    report.resource_data = persisted
+    db.add(models.LaboratoryReportAmendment(
+        report_id=report.id,
+        actor_id=current_user.id,
+        previous_conclusion=previous_conclusion,
+        conclusion=payload.conclusion,
+        reason=payload.reason,
+    ))
+    queue_fhir_resource(db, "DiagnosticReport", report.fhir_id, persisted)
+    db.commit()
+    db.refresh(report)
+    audit_logger.log_event(db, current_user.id, "DIAGNOSTIC_REPORT_AMENDED", {
+        "report_id": report.fhir_id,
+        "patient_id": workflow.patient_id,
+        "laboratory_id": workflow.laboratory_id,
+        "reason": payload.reason,
+    })
+    return {"id": report.fhir_id, "resource": persisted, "workflow_status": workflow.status}
+
+
 @router.post("/ServiceRequest/{service_request_id}/physician-review")
 def physician_review(
     service_request_id: str,

@@ -22,6 +22,19 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 10 clinical workflows
+
+- Added `Prescription`, `PrescriptionHistory`, `PhysicianClinicalReview`, and
+  `LaboratoryReportAmendment` models and migration
+  `e8d1a4c7b2f5_clinical_prescriptions_reviews`.
+- Added prescription create/transition and patient/provider prescription APIs.
+- Added physician clinical-review create/list APIs for patient and provider
+  workspaces, with consent and resource-ownership checks.
+- Added a laboratory DiagnosticReport amendment route preserving the previous
+  conclusion, actor, reason, and FHIR synchronization outbox state.
+- Extended Doctor, Patient, and Laboratory React workspaces with live controls
+  and status display. Node/npm browser build remains unavailable.
+
 ## Milestone 7.2 concurrency and recovery fixes
 
 - Cross-hospital document list/download/import now rechecks consent owner,

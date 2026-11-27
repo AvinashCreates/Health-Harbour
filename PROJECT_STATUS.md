@@ -32,6 +32,19 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 10 clinical-workflow status
+
+Milestone 10 implements prescription and physician-review workflows. Existing
+laboratory order, DiagnosticReport, Observation, and workflow state machinery
+are reused rather than duplicated. Prescriptions require active provider
+eligibility and patient MedicationRequest consent. Clinical reviews require
+DiagnosticReport consent and verify report/order ownership. DiagnosticReport
+amendments preserve previous conclusions and create an amendment history.
+
+The complete relevant backend suite passed 79 tests with 1 PostgreSQL-only skip.
+Frontend static diagnostics pass for modified screens, but Node/npm build and
+browser acceptance are unavailable.
+
 ## Milestone 7.2 validation status
 
 Milestone 7.2 is locally validated as a PARTIAL PASS. The complete relevant

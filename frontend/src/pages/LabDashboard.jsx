@@ -59,6 +59,20 @@ export default function LabDashboard({ token, user }) {
     }
   }
 
+  async function amendReport(request) {
+    const conclusion = window.prompt('Enter the amended report conclusion')
+    if (!conclusion) return
+    const reason = window.prompt('Enter the reason for the amendment')
+    if (!reason) return
+    setErr(''); setMessage('')
+    setBusyId(request.id)
+    try {
+      await api.amendDiagnosticReport(request.report_id, { conclusion, reason }, token)
+      setMessage('Diagnostic report amended.')
+      await refresh()
+    } catch (e) { setErr(e.message) } finally { setBusyId('') }
+  }
+
   async function submitResults(e) {
     e.preventDefault()
     if (!selected) return
@@ -144,7 +158,7 @@ export default function LabDashboard({ token, user }) {
               {!isTechnician && status === 'RESULTS_SUBMITTED' && (
                 <button className="btn-primary" disabled={busy} onClick={() => runAction(request, 'finalize')}>{busy ? 'Saving…' : 'Review and finalize'}</button>
               )}
-              {status === 'FINALIZED' && <p className="muted">The report is finalized and ready for the requesting physician.</p>}
+              {['FINALIZED', 'PHYSICIAN_REVIEWED'].includes(status) && request.report_id && <><p className="muted">The report is finalized and ready for the requesting physician.</p><button className="btn-ghost" disabled={busy} onClick={() => amendReport(request)}>Amend report</button></>}
             </article>
           )
         })}

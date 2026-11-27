@@ -18,6 +18,8 @@ export default function SharingAccess({ token }) {
   const [recordRequests, setRecordRequests] = useState([])
   const [careConnections, setCareConnections] = useState([])
   const [crossHospitalExchanges, setCrossHospitalExchanges] = useState([])
+  const [prescriptions, setPrescriptions] = useState([])
+  const [clinicalReviews, setClinicalReviews] = useState([])
   const [recipientType, setRecipientType] = useState('physician')
   const [doctorEmail, setDoctorEmail] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -39,6 +41,8 @@ export default function SharingAccess({ token }) {
       api.myPatientRecordRequests(token),
       api.myPatientCareConnections(token),
       api.myPatientCrossHospitalExchanges(token),
+      api.myPatientPrescriptions(token),
+      api.myPatientClinicalReviews(token),
     ])
     if (results[0].status === 'fulfilled') setPhysicians(results[0].value)
     if (results[1].status === 'fulfilled') setOrganizations(results[1].value)
@@ -47,6 +51,8 @@ export default function SharingAccess({ token }) {
     if (results[4].status === 'fulfilled') setRecordRequests(results[4].value)
     if (results[5].status === 'fulfilled') setCareConnections(results[5].value)
     if (results[6].status === 'fulfilled') setCrossHospitalExchanges(results[6].value)
+    if (results[7].status === 'fulfilled') setPrescriptions(results[7].value)
+    if (results[8].status === 'fulfilled') setClinicalReviews(results[8].value)
     const failed = results.find((result) => result.status === 'rejected')
     if (failed) setError(failed.reason?.message || 'Some access information could not be loaded.')
     setLoading(false)
@@ -191,6 +197,16 @@ export default function SharingAccess({ token }) {
             {revokingId === consent.id && <TransferStatus>Revoking access</TransferStatus>}
           </article>
         })}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">PRESCRIPTIONS</p><h2>Your authorized prescriptions</h2>
+        {prescriptions.length === 0 ? <p className="muted">No prescriptions are available for your account.</p> : <div className="permission-list">{prescriptions.map((prescription) => <article className="permission-row" key={prescription.id}><div><strong>{prescription.medication_name} · {prescription.dosage}</strong><small>Provider: {prescription.provider_name}</small><small>Frequency: {prescription.frequency}{prescription.duration ? ` · Duration: ${prescription.duration}` : ''}</small>{prescription.instructions && <small>Instructions: {prescription.instructions}</small>}</div><span className={`pill ${prescription.status === 'ACTIVE' ? 'pill-active' : ''}`}>{prescription.status}</span></article>)}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">CLINICAL REVIEWS</p><h2>Physician review history</h2>
+        {clinicalReviews.length === 0 ? <p className="muted">No clinical reviews have been recorded.</p> : <div className="activity-list">{clinicalReviews.map((review) => <div className="activity-row" key={review.id}><strong>{review.provider_name} · {review.status}</strong><span>{review.organization_name}</span><span>{review.clinical_note || 'No clinical note supplied'}</span><small>{displayDate(review.reviewed_at)}</small></div>)}</div>}
       </section>
 
       <section className="card">
