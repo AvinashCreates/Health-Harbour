@@ -1,5 +1,19 @@
 # Testing report
 
+## Latest Milestone 5 verification (2026-11-27)
+
+- AES-GCM encryption tests: 5 passed. Coverage includes round trips, unique
+  ciphertexts, missing/wrong keys, tampering detection, legacy plaintext
+  handling, and scanner availability fail-closed behavior.
+- Combined backend security/regression suite: **66 tests passed, 1
+  PostgreSQL-only test skipped**.
+- `test_api.py` and `test_security.py` passed as separate smoke scripts.
+- Milestone 5 migration `a31e7c9d2f10` passed on fresh SQLite and `alembic
+  check` reported no schema drift. SQLite required batch-alter mode and was
+  corrected after the first migration attempt.
+- PostgreSQL, Node/npm, browser acceptance, live HAPI, live Fabric, and ClamAV
+  end-to-end delivery remain NOT TESTED or NOT VERIFIED.
+
 ## Latest Milestone 4 verification (2026-11-27)
 
 - The focused `test_files` suite passed **12 tests**, including duplicate

@@ -41,6 +41,14 @@ class ClinicalFile(Base):
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_clinical_file_size_positive"),
         CheckConstraint("size_bytes <= 10485760", name="ck_clinical_file_size_limit"),
+        CheckConstraint(
+            "processing_status IN ('RECEIVED', 'QUARANTINED', 'SCANNING', 'CLEAN', 'REJECTED', 'SCAN_FAILED')",
+            name="ck_clinical_file_processing_status",
+        ),
+        CheckConstraint(
+            "scan_status IN ('NOT_REQUIRED', 'CLEAN', 'MALICIOUS', 'UNSUPPORTED', 'UNAVAILABLE', 'TIMEOUT')",
+            name="ck_clinical_file_scan_status",
+        ),
     )
     id = Column(String, primary_key=True, default=gen_uuid)
     patient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
@@ -52,6 +60,11 @@ class ClinicalFile(Base):
     category = Column(String, nullable=False, default="clinical-record")
     size_bytes = Column(Integer, nullable=False)
     sha256 = Column(String, nullable=False)
+    processing_status = Column(String(24), nullable=False, default="CLEAN", server_default=text("'CLEAN'"), index=True)
+    scan_status = Column(String(24), nullable=False, default="NOT_REQUIRED", server_default=text("'NOT_REQUIRED'"), index=True)
+    scan_detail = Column(String(500), nullable=True)
+    encryption_version = Column(String(16), nullable=True)
+    encryption_key_id = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     deleted_at = Column(DateTime, nullable=True)
 

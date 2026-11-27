@@ -184,7 +184,7 @@ export default function Files({ token, user }) {
           <div className="file-list">
             {files.map((file) => <article className="file-row" key={file.id}>
               <div className="file-icon" aria-hidden="true">▤</div>
-              <div className="file-meta"><strong>{file.filename}</strong><span>{file.category || 'Clinical record'} · {formatSize(file.size_bytes)} · {formatDate(file.created_at)}</span><small>{file.patient_name ? `Patient: ${file.patient_name}` : `Uploaded by ${file.uploaded_by_name || 'care team'}`}{file.workflow_status ? ` · ${file.workflow_status.replaceAll('_', ' ').toLowerCase()}` : ''}</small></div>
+              <div className="file-meta"><strong>{file.filename}</strong><span>{file.category || 'Clinical record'} · {formatSize(file.size_bytes)} · {formatDate(file.created_at)}</span><small>{file.patient_name ? `Patient: ${file.patient_name}` : `Uploaded by ${file.uploaded_by_name || 'care team'}`}{file.workflow_status ? ` · ${file.workflow_status.replaceAll('_', ' ').toLowerCase()}` : ''}</small><small>Processing: {file.processing_status || 'CLEAN'} · Scan: {file.scan_status || 'NOT_REQUIRED'} · Storage: {file.encryption === 'AES-256-GCM-v1' ? 'Encrypted at rest' : 'Legacy storage'}</small></div>
               <div className="file-actions"><button className="btn-ghost" type="button" onClick={() => viewFile(file)} disabled={Boolean(preview?.kind === 'loading')}>View</button><button className="btn-ghost" type="button" onClick={() => download(file)}>Download</button>{user.role === 'patient' && file.can_delete && <button className="btn-danger-ghost" type="button" onClick={() => remove(file)}>Delete</button>}</div>
             </article>)}
           </div>
@@ -207,6 +207,9 @@ export default function Files({ token, user }) {
             <div><dt>Added</dt><dd>{formatDate(preview.file.created_at)}</dd></div>
             <div><dt>Uploaded by</dt><dd>{preview.file.uploaded_by_name || 'Care team'}</dd></div>
             {preview.file.patient_name && <div><dt>Patient</dt><dd>{preview.file.patient_name}</dd></div>}
+            <div><dt>Processing</dt><dd>{preview.file.processing_status || 'CLEAN'}</dd></div>
+            <div><dt>Scan</dt><dd>{preview.file.scan_status || 'NOT_REQUIRED'}{preview.file.scan_detail ? ` · ${preview.file.scan_detail}` : ''}</dd></div>
+            <div><dt>Storage protection</dt><dd>{preview.file.encryption === 'AES-256-GCM-v1' ? 'AES-256-GCM encrypted' : 'Unencrypted legacy storage'}</dd></div>
           </dl>
           <div className="file-preview-content">
             {preview.kind === 'loading' && <p className="muted" role="status">Loading file preview…</p>}

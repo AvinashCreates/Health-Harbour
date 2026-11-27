@@ -114,6 +114,24 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 5 security hardening (2026-11-27)
+
+- Clinical documents can be encrypted at rest with AES-256-GCM. Storage uses
+  a unique 96-bit nonce, authenticated associated storage-key data, a key
+  identifier, and explicit encryption metadata.
+- Missing, malformed, mismatched, or invalid ciphertext keys fail closed. The
+  application does not emit key material or silently persist plaintext when
+  encryption is required.
+- Existing unencrypted documents are preserved and labeled as legacy storage;
+  no startup re-encryption or rewrite occurs.
+- A scanner interface supports clean, malicious, unsupported, unavailable, and
+  timeout outcomes. ClamAV TCP is an opt-in adapter. Required scanning never
+  silently bypasses unavailable/failed scanners; unscanned records remain
+  blocked from download.
+- Live ClamAV, managed KMS, HAPI, Fabric, PostgreSQL, and browser verification
+  remain explicitly unverified. Local configuration keys are development
+  mechanisms only, not production key management.
+
 ## Milestone 4 clinical document controls (2026-11-27)
 
 - Clinical files remain private to backend-controlled local storage. A storage

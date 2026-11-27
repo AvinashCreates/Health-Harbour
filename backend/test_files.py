@@ -440,6 +440,59 @@ class ClinicalFileApiTests(unittest.TestCase):
             403,
         )
 
+    def test_encrypted_upload_download_and_scan_unavailable_fail_closed(self):
+        encryption_key = __import__("base64").b64encode(b"k" * 32).decode("ascii")
+        with patch.dict(os.environ, {
+            "DOCUMENT_ENCRYPTION_REQUIRED": "true",
+            "DOCUMENT_ENCRYPTION_KEY": encryption_key,
+            "DOCUMENT_SCAN_REQUIRED": "true",
+        }):
+            from services.document_scanner import ScanResult
+            with patch("routers.files.get_document_scanner") as scanner_factory:
+                scanner_factory.return_value.scan.return_value = ScanResult("CLEAN", "Synthetic clean result")
+                uploaded = self._upload_patient_file(self.patient)
+            self.assertEqual(uploaded.status_code, 201, uploaded.text)
+            file_id = uploaded.json()["id"]
+            self.assertEqual(uploaded.json()["processing_status"], "CLEAN")
+            self.assertEqual(uploaded.json()["encryption"], "AES-256-GCM-v1")
+
+            downloaded = self.client.get(
+                f"/files/{file_id}/download",
+                headers=self._headers(self.patient),
+            )
+            self.assertEqual(downloaded.status_code, 200)
+            self.assertEqual(downloaded.content, b"Follow-up next week")
+
+            db = self.session_factory()
+            try:
+                record = db.query(models.ClinicalFile).filter_by(id=file_id).one()
+                storage_path = Path(os.environ["FILE_STORAGE_PATH"]) / record.storage_key
+                self.assertNotIn(b"Follow-up next week", storage_path.read_bytes())
+            finally:
+                db.close()
+
+            with patch("routers.files.get_document_scanner") as scanner_factory:
+                scanner_factory.return_value.scan.return_value = ScanResult("UNAVAILABLE", "Scanner offline")
+                rejected = self.client.post(
+                    "/files",
+                    headers=self._headers(self.patient),
+                    files={"file": ("scan-offline.txt", b"Synthetic unscanned data", "text/plain")},
+                    data={"category": "clinical-record"},
+                )
+            self.assertEqual(rejected.status_code, 503)
+
+            with patch("routers.files.get_document_scanner") as scanner_factory:
+                scanner_factory.return_value.scan.return_value = __import__(
+                    "services.document_scanner", fromlist=["ScanResult"]
+                ).ScanResult("MALICIOUS", "Synthetic malicious fixture")
+                rejected = self.client.post(
+                    "/files",
+                    headers=self._headers(self.patient),
+                    files={"file": ("malicious.txt", b"Synthetic malicious fixture", "text/plain")},
+                    data={"category": "clinical-record"},
+                )
+            self.assertEqual(rejected.status_code, 422)
+
     def test_duplicate_document_and_category_rejections_are_safe(self):
         first = self._upload_patient_file(self.patient)
         self.assertEqual(first.status_code, 201, first.text)

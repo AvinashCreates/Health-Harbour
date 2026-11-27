@@ -169,6 +169,23 @@ with the database and protect it with deployment-level encryption, access
 controls, malware scanning, and retention policies before any real-world use.
 The prototype does not provide those production storage safeguards.
 
+## Document encryption and malware scanning
+
+Set `DOCUMENT_ENCRYPTION_REQUIRED=true` and provide
+`DOCUMENT_ENCRYPTION_KEY` as 32 bytes of base64 or hexadecimal key material to
+encrypt new files with AES-256-GCM. Wrong/missing keys and tampered ciphertext
+fail closed. Encryption metadata identifies the algorithm and a derived key ID;
+existing plaintext files are preserved as legacy records and are never rewritten
+automatically. This is an application-level key mechanism, not a managed KMS;
+operators must protect and rotate keys outside the repository.
+
+Set `DOCUMENT_SCAN_REQUIRED=true` and `DOCUMENT_SCANNER=clamav` with
+`CLAMAV_HOST`, `CLAMAV_PORT`, and `CLAMAV_TIMEOUT_SECONDS` to enable the
+ClamAV TCP adapter. Required scanner failures keep documents unavailable and
+return clear API errors. The scanner adapter is not live-verified unless a real
+ClamAV service is tested. Antivirus scanning is not a substitute for malware
+remediation, content controls, or end-to-end security review.
+
 ## Tests
 
 ```bash

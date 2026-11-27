@@ -32,6 +32,18 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 5 security hardening status
+
+Milestone 5 adds opt-in AES-256-GCM document encryption, safe key validation,
+key/ciphertext metadata, a ClamAV-over-TCP adapter, scan-result status fields,
+and fail-closed scanner behavior. Encryption and ClamAV integration are
+configuration-driven; missing keys or unavailable scanners do not silently
+store or make plaintext documents available. Existing unencrypted files remain
+explicitly classified as legacy records rather than being silently migrated.
+
+Live PostgreSQL, Node/npm browser verification, live HAPI persistence, live
+Fabric confirmation, and an end-to-end ClamAV service test remain unverified.
+
 ## Milestone 4 document exchange status
 
 The existing clinical-file implementation was strengthened with an explicit

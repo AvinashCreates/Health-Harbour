@@ -58,7 +58,10 @@ preserved and not normalized or reverted.
    a live-ledger verification until commit is confirmed.
 6. Clinical file bytes are stored outside the publicly served frontend through
    `services/document_storage.py`. The local adapter uses generated keys,
-   private directory/file modes, and no exposed storage paths.
+   private directory/file modes, and no exposed storage paths. When explicitly
+   required, AES-256-GCM stores a framed ciphertext with a 96-bit nonce and
+   key metadata. Existing plaintext records are left unchanged and explicitly
+   classified as legacy storage.
    not in PostgreSQL or Fabric. The database stores metadata and a digest.
 7. `services/audit_logger.py` maintains the application hash chain. It is
    separate from the Fabric ledger and does not repair historical records.

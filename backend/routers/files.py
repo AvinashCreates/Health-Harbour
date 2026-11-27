@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 import models
@@ -18,7 +18,11 @@ from deps import get_current_user
 from services import audit_logger, fhir_builder
 from services.consent_access import consented_patient_ids, has_active_consent
 from services.fhir_server import authoritative_resource, fhir_mode, persist_resource
-from services.document_storage import get_document_storage
+from services.document_storage import (
+    EncryptionConfigurationError,
+    get_document_storage,
+)
+from services.document_scanner import get_document_scanner
 
 router = APIRouter(prefix="/files", tags=["clinical files"])
 logger = logging.getLogger(__name__)
@@ -72,6 +76,8 @@ def _can_access(
 ) -> bool:
     if file_record.deleted_at is not None:
         return False
+    if getattr(file_record, "processing_status", "CLEAN") != "CLEAN":
+        return False
     if user.role == "patient":
         return user.id == file_record.patient_id
     if user.role == "doctor":
@@ -113,6 +119,10 @@ def _metadata(
         "service_request_id": file_record.service_request_id,
         "workflow_status": workflow.status if workflow else None,
         "created_at": file_record.created_at,
+        "processing_status": getattr(file_record, "processing_status", "CLEAN"),
+        "scan_status": getattr(file_record, "scan_status", "NOT_REQUIRED"),
+        "scan_detail": getattr(file_record, "scan_detail", None),
+        "encryption": "AES-256-GCM-v1" if getattr(file_record, "encryption_version", None) else "UNENCRYPTED_LEGACY",
         "can_delete": user.role == "patient" and file_record.patient_id == user.id,
     }
 
@@ -420,6 +430,30 @@ async def upload_file(
     if duplicate:
         _audit_upload_rejection(db, current_user, "duplicate document checksum", category)
         raise HTTPException(status_code=409, detail="An identical active document has already been uploaded")
+
+    processing_status = "CLEAN"
+    scan_status = "NOT_REQUIRED"
+    scan_detail = None
+    if os.getenv("DOCUMENT_SCAN_REQUIRED", "false").strip().lower() == "true":
+        processing_status = "SCANNING"
+        result = get_document_scanner().scan(content, original_filename)
+        scan_status = result.status
+        scan_detail = result.detail
+        if result.status == "CLEAN":
+            processing_status = "CLEAN"
+        elif result.status == "MALICIOUS":
+            processing_status = "QUARANTINED"
+            _audit_upload_rejection(db, current_user, result.detail, category)
+            raise HTTPException(status_code=422, detail="The document was rejected by malware scanning")
+        elif result.status == "UNSUPPORTED":
+            processing_status = "REJECTED"
+            _audit_upload_rejection(db, current_user, result.detail, category)
+            raise HTTPException(status_code=422, detail="Malware scanning returned an unsupported result")
+        else:
+            processing_status = "SCAN_FAILED"
+            _audit_upload_rejection(db, current_user, result.detail, category)
+            raise HTTPException(status_code=503, detail="Document malware scanning is temporarily unavailable")
+
     file_id = str(uuid.uuid4())
     storage_key = f"{uuid.uuid4().hex}.blob"
     timestamp = datetime.utcnow()
@@ -434,6 +468,9 @@ async def upload_file(
         category=category,
         size_bytes=len(content),
         sha256=digest,
+        processing_status=processing_status,
+        scan_status=scan_status,
+        scan_detail=scan_detail,
         created_at=timestamp,
     )
     service_request = request_resource
@@ -450,7 +487,9 @@ async def upload_file(
     storage = get_document_storage()
     storage_path = None
     try:
-        storage_path = storage.write_new(storage_key, content)
+        storage_path, encryption_version, encryption_key_id = storage.write_new(storage_key, content)
+        file_record.encryption_version = encryption_version
+        file_record.encryption_key_id = encryption_key_id
         persisted_reference = persist_resource(document_reference)
         db.add(file_record)
         db.add(models.FHIRResource(
@@ -494,21 +533,39 @@ def download_file(
     storage_path = storage.path_for(file_record.storage_key)
     if not storage.exists(file_record.storage_key):
         raise HTTPException(status_code=410, detail="The file is no longer available")
+    try:
+        decrypted_content = storage.read_authorized(
+            file_record.storage_key,
+            getattr(file_record, "encryption_version", None),
+            getattr(file_record, "encryption_key_id", None),
+        )
+    except EncryptionConfigurationError as exc:
+        audit_logger.log_event(db, current_user.id, "DOCUMENT_ACCESS_DENIED", {
+            "patient_id": file_record.patient_id,
+            "resource_id": file_record.id,
+            "resource_type": "DocumentReference",
+            "outcome": "denied",
+            "reason": "encrypted_document_unavailable",
+        })
+        raise HTTPException(status_code=503, detail="The stored document could not be decrypted") from exc
+
     audit_logger.log_event(db, current_user.id, "DATA_ACCESSED", {
         "patient_id": file_record.patient_id,
         "resource_id": file_record.id,
         "resource_type": "DocumentReference",
         "purpose": "Clinical file download",
     })
-    return FileResponse(
-        storage_path,
+    from urllib.parse import quote
+
+    safe_filename = quote(file_record.filename, safe="")
+    return Response(
+        content=decrypted_content,
         media_type=file_record.media_type,
-        filename=file_record.filename,
-        content_disposition_type="attachment",
         headers={
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
-            "Content-Length": str(file_record.size_bytes),
+            "Content-Length": str(len(decrypted_content)),
+            "Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}",
         },
     )
 

@@ -22,6 +22,21 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 5 security hardening
+
+- Added additive migration `a31e7c9d2f10` for processing, scan, encryption
+  version, and key metadata on `clinical_files`.
+- Added AES-256-GCM envelope storage when `DOCUMENT_ENCRYPTION_REQUIRED=true`
+  and `DOCUMENT_ENCRYPTION_KEY` contains 32 bytes encoded as base64 or hex.
+- Added wrong-key, missing-key, ciphertext-tampering, and unique-nonce tests.
+- Added a scanner interface and ClamAV TCP adapter. When scanning is required,
+  clean, malicious, unsupported, unavailable, and timeout outcomes have explicit
+  statuses and no failed/unscanned record becomes downloadable.
+- Files workspace now displays processing, scan, and storage-protection status.
+- Existing unencrypted files remain identifiable as legacy storage and are not
+  rewritten automatically. Live managed KMS, antivirus service, HAPI, Fabric,
+  PostgreSQL, and browser verification remain outstanding.
+
 ## Milestone 4 clinical document exchange
 
 - Reused the existing private `ClinicalFile` model and `/files` API rather

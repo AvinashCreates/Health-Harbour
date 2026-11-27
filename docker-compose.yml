@@ -44,6 +44,13 @@ services:
       FABRIC_GATEWAY_URL: "${FABRIC_GATEWAY_URL:-http://fabric-gateway:8080}"
       FABRIC_GATEWAY_TOKEN: "${FABRIC_GATEWAY_TOKEN:-}"
       FABRIC_PSEUDONYM_KEY: "${FABRIC_PSEUDONYM_KEY:-}"
+      DOCUMENT_ENCRYPTION_REQUIRED: "${DOCUMENT_ENCRYPTION_REQUIRED:-false}"
+      DOCUMENT_ENCRYPTION_KEY: "${DOCUMENT_ENCRYPTION_KEY:-}"
+      DOCUMENT_SCAN_REQUIRED: "${DOCUMENT_SCAN_REQUIRED:-false}"
+      DOCUMENT_SCANNER: "${DOCUMENT_SCANNER:-unavailable}"
+      CLAMAV_HOST: "${CLAMAV_HOST:-}"
+      CLAMAV_PORT: "${CLAMAV_PORT:-3310}"
+      CLAMAV_TIMEOUT_SECONDS: "${CLAMAV_TIMEOUT_SECONDS:-10}"
     command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "127.0.0.1:8000:8000"

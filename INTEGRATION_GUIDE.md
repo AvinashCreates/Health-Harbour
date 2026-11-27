@@ -159,10 +159,9 @@ database.
 
 ## Readiness boundary
 
-The current Milestone 4 file suite and backend/API tests passed on isolated
-SQLite. Milestone 4 added private storage adapters, category validation,
-duplicate detection, and denied-access/upload-rejection audits. The current
-SQLite migration chain passed.
+Milestone 5 encryption/scanner tests and combined backend/API suites pass on
+isolated SQLite. Milestone 5 added AES-256-GCM storage and explicit scan states.
+The current SQLite migration chain passed through `a31e7c9d2f10`.
 Earlier frontend build, Go module, disposable PostgreSQL migration, and
 two-process audit append results are recorded in [TESTING_REPORT.md](./TESTING_REPORT.md).
 The new Registry workspace could not be built here because Node.js/npm were
