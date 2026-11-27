@@ -169,6 +169,20 @@ with the database and protect it with deployment-level encryption, access
 controls, malware scanning, and retention policies before any real-world use.
 The prototype does not provide those production storage safeguards.
 
+## Cross-hospital exchange
+
+Approved healthcare providers can initiate cross-hospital exchange requests
+for a patient and source organization. The patient explicitly approves,
+rejects, or revokes access. Approval creates the existing scoped consent
+record; it does not grant organization-wide access or copy source documents.
+
+Source-document listings require active patient Document consent, a clean
+processing state, matching source organization, and the requesting provider's
+current verified/affiliated status. Document import records preserve source
+organization, receiving organization, source checksum, importing provider,
+consent reference, and integrity status without duplicating bytes or changing
+source ownership.
+
 ## Document encryption and malware scanning
 
 Set `DOCUMENT_ENCRYPTION_REQUIRED=true` and provide

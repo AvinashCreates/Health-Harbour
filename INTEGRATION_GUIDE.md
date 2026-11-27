@@ -159,8 +159,8 @@ database.
 
 ## Readiness boundary
 
-Milestone 6 FHIR mapping/outbox tests and combined backend/API suites pass on
-isolated SQLite. The migration chain passes through `c7f3a9d1e4b2` and
+Milestone 7 cross-hospital exchange tests and combined backend/API suites pass on
+isolated SQLite. The migration chain passes through `d4e8b2a1c9f7` and
 `alembic check` reports no drift. Live HAPI create/read/update/search,
 disposable PostgreSQL migration, and browser acceptance remain unverified.
 Earlier frontend build, Go module, disposable PostgreSQL migration, and

@@ -22,6 +22,23 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 7 cross-hospital exchange
+
+- Added `CrossHospitalExchangeRequest` and
+  `CrossOrganizationDocumentImport` models and migration
+  `d4e8b2a1c9f7_cross_hospital_exchange`.
+- Added source/custodian organization fields to `ClinicalFile` metadata.
+- Added patient/provider cross-hospital exchange APIs. Approval creates the
+  existing consent model; rejection and revocation create no authorized access.
+- Added source-document listing and provenance-preserving import records.
+  Imports do not duplicate document bytes or replace source organization
+  ownership.
+- Added tenant checks for requesting-provider affiliation and organization
+  status, patient ownership, consent scope/expiry/revocation, source document
+  processing state, and source organization.
+- Added cross-hospital audit and allowlisted Fabric event types. The live
+  ledger, HAPI, PostgreSQL, and browser verification remain outstanding.
+
 ## Milestone 6 FHIR interoperability
 
 - Added `FHIRSyncOutbox` and migration `c7f3a9d1e4b2` with stable resource

@@ -60,6 +60,8 @@ class ClinicalFile(Base):
     category = Column(String, nullable=False, default="clinical-record")
     size_bytes = Column(Integer, nullable=False)
     sha256 = Column(String, nullable=False)
+    source_organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=True, index=True)
+    custodian_organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=True, index=True)
     processing_status = Column(String(24), nullable=False, default="CLEAN", server_default=text("'CLEAN'"), index=True)
     scan_status = Column(String(24), nullable=False, default="NOT_REQUIRED", server_default=text("'NOT_REQUIRED'"), index=True)
     scan_detail = Column(String(500), nullable=True)
@@ -440,6 +442,56 @@ class OrganizationAffiliationEvent(Base):
     to_status = Column(String(24), nullable=False)
     reason = Column(String(1000), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class CrossHospitalExchangeRequest(Base):
+    __tablename__ = "cross_hospital_exchange_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'REVOKED', 'EXPIRED')",
+            name="ck_cross_hospital_exchange_status",
+        ),
+        Index("ix_cross_exchange_patient_status", "patient_id", "status"),
+        Index("ix_cross_exchange_requesting_org_status", "requesting_organization_id", "status"),
+        Index("ix_cross_exchange_source_org_status", "source_organization_id", "status"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    patient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    requesting_organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    requesting_provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    source_organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    resource_types = Column(JSON, nullable=False, default=list)
+    purpose = Column(String(24), nullable=False, default="TREATMENT")
+    requested_duration_days = Column(Integer, nullable=False)
+    reason = Column(String(1000), nullable=False)
+    status = Column(String(24), nullable=False, default="REQUESTED", index=True)
+    consent_id = Column(String, ForeignKey("consents.id"), nullable=True, index=True)
+    response_reason = Column(String(1000), nullable=True)
+    requested_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    responded_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class CrossOrganizationDocumentImport(Base):
+    __tablename__ = "cross_org_document_imports"
+    __table_args__ = (
+        CheckConstraint("status IN ('PENDING', 'IMPORTED', 'FAILED')", name="ck_cross_org_document_import_status"),
+        UniqueConstraint("exchange_request_id", "source_document_id", name="uq_exchange_document_import"),
+        Index("ix_cross_doc_import_receiving_org", "receiving_organization_id", "status"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    exchange_request_id = Column(String, ForeignKey("cross_hospital_exchange_requests.id"), nullable=False, index=True)
+    source_document_id = Column(String, ForeignKey("clinical_files.id"), nullable=False, index=True)
+    source_organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    receiving_organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    importing_provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    consent_id = Column(String, ForeignKey("consents.id"), nullable=False, index=True)
+    checksum = Column(String(64), nullable=False)
+    integrity_verified = Column(Boolean, nullable=False, default=False)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    failure_reason = Column(String(500), nullable=True)
+    imported_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class CareConnection(Base):

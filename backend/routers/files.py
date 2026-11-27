@@ -134,6 +134,8 @@ def _metadata(
         "scan_detail": getattr(file_record, "scan_detail", None),
         "encryption": "AES-256-GCM-v1" if getattr(file_record, "encryption_version", None) else "UNENCRYPTED_LEGACY",
         "fhir_sync_status": fhir_sync_status,
+        "source_organization_id": getattr(file_record, "source_organization_id", None),
+        "custodian_organization_id": getattr(file_record, "custodian_organization_id", None),
         "can_delete": user.role == "patient" and file_record.patient_id == user.id,
     }
 
@@ -476,6 +478,14 @@ async def upload_file(
     file_id = str(uuid.uuid4())
     storage_key = f"{uuid.uuid4().hex}.blob"
     timestamp = datetime.utcnow()
+    source_organization_id = None
+    custodian_organization_id = None
+    if workflow:
+        source_organization_id = db.query(models.HealthcareOrganization.id).filter(
+            models.HealthcareOrganization.legacy_user_id == workflow.laboratory_id,
+        ).scalar()
+        custodian_organization_id = source_organization_id
+
     file_record = models.ClinicalFile(
         id=file_id,
         patient_id=patient.id,
@@ -487,6 +497,8 @@ async def upload_file(
         category=category,
         size_bytes=len(content),
         sha256=digest,
+        source_organization_id=source_organization_id,
+        custodian_organization_id=custodian_organization_id,
         processing_status=processing_status,
         scan_status=scan_status,
         scan_detail=scan_detail,

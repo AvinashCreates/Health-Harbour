@@ -17,6 +17,7 @@ export default function SharingAccess({ token }) {
   const [history, setHistory] = useState([])
   const [recordRequests, setRecordRequests] = useState([])
   const [careConnections, setCareConnections] = useState([])
+  const [crossHospitalExchanges, setCrossHospitalExchanges] = useState([])
   const [recipientType, setRecipientType] = useState('physician')
   const [doctorEmail, setDoctorEmail] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -37,6 +38,7 @@ export default function SharingAccess({ token }) {
       api.accessHistory(token),
       api.myPatientRecordRequests(token),
       api.myPatientCareConnections(token),
+      api.myPatientCrossHospitalExchanges(token),
     ])
     if (results[0].status === 'fulfilled') setPhysicians(results[0].value)
     if (results[1].status === 'fulfilled') setOrganizations(results[1].value)
@@ -44,6 +46,7 @@ export default function SharingAccess({ token }) {
     if (results[3].status === 'fulfilled') setHistory(results[3].value)
     if (results[4].status === 'fulfilled') setRecordRequests(results[4].value)
     if (results[5].status === 'fulfilled') setCareConnections(results[5].value)
+    if (results[6].status === 'fulfilled') setCrossHospitalExchanges(results[6].value)
     const failed = results.find((result) => result.status === 'rejected')
     if (failed) setError(failed.reason?.message || 'Some access information could not be loaded.')
     setLoading(false)
@@ -75,6 +78,23 @@ export default function SharingAccess({ token }) {
       setResourceTypes(['Document'])
       await refresh()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  async function decideCrossHospitalExchange(exchange, decision) {
+    setError(''); setMessage('')
+    setBusy(true)
+    try {
+      await api.decideCrossHospitalExchange(exchange.id, {
+        decision,
+        reason: decision === 'APPROVED'
+          ? 'I approved this limited cross-hospital record exchange.'
+          : decision === 'REVOKED'
+            ? 'I revoked this cross-hospital permission.'
+            : 'I rejected this cross-hospital record exchange.',
+      }, token)
+      setMessage(decision === 'APPROVED' ? 'Cross-hospital exchange approved.' : decision === 'REVOKED' ? 'Cross-hospital permission revoked.' : 'Cross-hospital exchange rejected.')
+      await refresh()
+    } catch (requestError) { setError(requestError.message) } finally { setBusy(false) }
   }
 
   async function decideRequest(request, decision) {
@@ -131,6 +151,14 @@ export default function SharingAccess({ token }) {
         {availablePhysicians.length === 0 && !loading && <p className="muted">{recipientType === 'organization' ? 'No named physicians are available for this organization.' : 'No physicians are available to select right now.'}</p>}
         {message && <div className="success" role="status">{message}</div>}
         {error && <div className="error" role="alert">{error}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">CROSS-HOSPITAL EXCHANGE</p><h2>Hospital record requests</h2>
+        {crossHospitalExchanges.length === 0 ? <p className="muted">No cross-hospital exchange requests are available.</p> : <div className="permission-list">{crossHospitalExchanges.map((exchange) => <article className="permission-row" key={exchange.id}>
+          <div><strong>{exchange.requesting_organization_name} · {exchange.requesting_provider_name}</strong><small>Source hospital: {exchange.source_organization_name}</small><small>Purpose: {exchange.purpose}</small><small>Records: {(exchange.resource_types || []).join(', ')}</small><small>Duration: {exchange.requested_duration_days} days</small><small>Reason: {exchange.reason}</small></div>
+          <div className="permission-status"><span className={`pill ${exchange.status === 'APPROVED' ? 'pill-active' : ''}`}>{exchange.status}</span>{exchange.status === 'REQUESTED' && <><button type="button" className="btn-primary" disabled={busy} onClick={() => decideCrossHospitalExchange(exchange, 'APPROVED')}>Approve exchange</button><button type="button" className="btn-ghost" disabled={busy} onClick={() => decideCrossHospitalExchange(exchange, 'REJECTED')}>Reject</button></>}{exchange.status === 'APPROVED' && <button type="button" className="btn-danger-ghost" disabled={busy} onClick={() => decideCrossHospitalExchange(exchange, 'REVOKED')}>Revoke</button>}</div>
+        </article>)}</div>}
       </section>
 
       <section className="card">

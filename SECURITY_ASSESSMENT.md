@@ -114,6 +114,25 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 7 cross-hospital controls (2026-11-27)
+
+- Cross-hospital requests require a currently verified provider with an active
+  affiliation to the requesting organization. Requesting and source
+  organizations must be distinct and approved.
+- Patient approval creates the existing scoped Consent record; rejection,
+  expiry, and revocation block document access. Resource scope is rechecked
+  before source-document listing and import.
+- Source documents are queried by patient, source organization, deletion
+  state, and clean processing state. Import records preserve source document,
+  source and receiving organizations, checksum, importing provider, consent,
+  and integrity status without copying bytes or changing source ownership.
+- Audit events and Fabric allowlist entries cover exchange request, consent
+  grant/rejection/revoke, and document import. Clinical contents and secrets
+  are not included.
+- Live tenant, PostgreSQL, HAPI, Fabric, and browser verification remains
+  incomplete; cross-hospital tests currently provide isolated SQLite evidence
+  only.
+
 ## Milestone 6 FHIR interoperability security (2026-11-27)
 
 - FHIR synchronization is a durable application-state mirror, not an authorization

@@ -22,11 +22,14 @@ export default function DoctorDashboard({ token }) {
   const [careConnections, setCareConnections] = useState([])
   const [recordRequests, setRecordRequests] = useState([])
   const [providerAffiliations, setProviderAffiliations] = useState([])
+  const [crossHospitalExchanges, setCrossHospitalExchanges] = useState([])
+  const [registryOrganizations, setRegistryOrganizations] = useState([])
+  const [crossHospitalForm, setCrossHospitalForm] = useState({ patient_id: '', source_organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
   const [recordRequestForm, setRecordRequestForm] = useState({ patient_id: '', organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
 
   async function refresh() {
     try {
-      const [p, l, r, d, c, q, affiliations] = await Promise.all([
+      const [p, l, r, d, c, q, affiliations, exchanges, organizations] = await Promise.all([
         api.accessiblePatients(token),
         api.listLaboratories(token),
         api.listServiceRequests(token),
@@ -34,8 +37,10 @@ export default function DoctorDashboard({ token }) {
         api.myProviderCareConnections(token),
         api.myProviderRecordRequests(token),
         api.myProviderAffiliations(token),
+        api.myProviderCrossHospitalExchanges(token),
+        api.registryOrganizations(token),
       ])
-      setPatients(p); setLaboratories(l); setRequests(r); setReports(d); setCareConnections(c); setRecordRequests(q); setProviderAffiliations(affiliations)
+      setPatients(p); setLaboratories(l); setRequests(r); setReports(d); setCareConnections(c); setRecordRequests(q); setProviderAffiliations(affiliations); setCrossHospitalExchanges(exchanges); setRegistryOrganizations(organizations)
       if (!form.lab_email && l.length > 0) setForm((current) => ({ ...current, lab_email: l[0].email }))
     } catch (e) { setErr(e.message) }
   }
@@ -66,6 +71,29 @@ export default function DoctorDashboard({ token }) {
         response: decision === 'ACCEPTED' ? 'I accept this care connection.' : 'I am unable to accept this care connection.',
       }, token)
       setMessage('Care connection response saved.')
+      await refresh()
+    } catch (e) { setErr(e.message) }
+  }
+
+  async function submitCrossHospitalExchange(e) {
+    e.preventDefault()
+    setErr(''); setMessage('')
+    const requestingAffiliation = providerAffiliations.find((item) => item.status === 'ACTIVE')
+    if (!requestingAffiliation) {
+      setErr('An active organization affiliation is required.')
+      return
+    }
+    try {
+      await api.createCrossHospitalExchange({
+        patient_id: crossHospitalForm.patient_id,
+        requesting_organization_id: requestingAffiliation.organization_id,
+        source_organization_id: crossHospitalForm.source_organization_id,
+        resource_types: crossHospitalForm.resource_types,
+        requested_duration_days: Number(crossHospitalForm.requested_duration_days),
+        reason: crossHospitalForm.reason,
+      }, token)
+      setMessage('Cross-hospital exchange request sent for patient approval.')
+      setCrossHospitalForm({ patient_id: '', source_organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
       await refresh()
     } catch (e) { setErr(e.message) }
   }
@@ -110,6 +138,19 @@ export default function DoctorDashboard({ token }) {
       <section className="card">
         <p className="eyebrow">PATIENT CONNECTIONS</p><h2>Incoming care connections</h2>
         {careConnections.length === 0 ? <p className="muted">No patient care connections have been initiated.</p> : careConnections.map((connection) => <div className="report" key={connection.id}><strong>{connection.patient_name}</strong><span className="muted">{connection.organization_name} · {connection.status}</span><span>{connection.reason}</span>{connection.status === 'INITIATED' && <div className="registry-actions"><button className="btn-primary" onClick={() => respondConnection(connection, 'ACCEPTED')}>Accept</button><button className="btn-ghost" onClick={() => respondConnection(connection, 'DECLINED')}>Decline</button></div>}</div>)}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">CROSS-HOSPITAL EXCHANGE</p><h2>Request records from another hospital</h2>
+        <form onSubmit={submitCrossHospitalExchange} className="stacked-form">
+          <label>Patient<select required value={crossHospitalForm.patient_id} onChange={(e) => setCrossHospitalForm((f) => ({ ...f, patient_id: e.target.value }))}><option value="">Choose patient</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.full_name}</option>)}</select></label>
+          <label>Source hospital<select required value={crossHospitalForm.source_organization_id} onChange={(e) => setCrossHospitalForm((f) => ({ ...f, source_organization_id: e.target.value }))}><option value="">Choose source organization</option>{registryOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.display_name}</option>)}</select></label>
+          <fieldset className="scope-fieldset"><legend>Requested record types</legend><div className="scope-list">{['Document', 'DiagnosticReport', 'Observation', 'ServiceRequest'].map((scope) => <label className="scope-option" key={scope}><input type="checkbox" checked={crossHospitalForm.resource_types.includes(scope)} onChange={(e) => setCrossHospitalForm((f) => ({ ...f, resource_types: e.target.checked ? [...f.resource_types, scope] : f.resource_types.filter((item) => item !== scope) }))} />{scope}</label>)}</div></fieldset>
+          <label>Requested duration (days)<input type="number" min="1" max="30" required value={crossHospitalForm.requested_duration_days} onChange={(e) => setCrossHospitalForm((f) => ({ ...f, requested_duration_days: Number(e.target.value) }))} /></label>
+          <label>Care reason<textarea rows="3" required minLength="3" maxLength="1000" value={crossHospitalForm.reason} onChange={(e) => setCrossHospitalForm((f) => ({ ...f, reason: e.target.value }))} /></label>
+          <button className="btn-primary" type="submit" disabled={!crossHospitalForm.patient_id || !crossHospitalForm.source_organization_id || !crossHospitalForm.resource_types.length || !crossHospitalForm.reason}>Send patient approval request</button>
+        </form>
+        {crossHospitalExchanges.length > 0 && <div className="registry-list">{crossHospitalExchanges.map((exchange) => <div className="report" key={exchange.id}><strong>{exchange.requesting_organization_name} → {exchange.source_organization_name}</strong><span className="muted">{exchange.patient_name} · {exchange.status}</span><span>{exchange.resource_types.join(', ')} · {exchange.requested_duration_days} days</span>{exchange.status === 'APPROVED' && <>{exchange.resource_types.includes('Document') && <button className="btn-ghost" type="button" onClick={async () => { try { const documents = await api.crossHospitalExchangeDocuments(exchange.id, token); setMessage(documents.length ? `${documents.length} approved source document(s) available.` : 'No approved source documents are available.') } catch (e) { setErr(e.message) } }}>View approved source documents</button>}</>}</div>)}</div>}
       </section>
 
       <section className="card">

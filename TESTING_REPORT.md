@@ -1,5 +1,19 @@
 # Testing report
 
+## Latest Milestone 7 verification (2026-11-27)
+
+- Two cross-hospital exchange tests passed. Coverage includes patient approval,
+  Document-scope retrieval, provenance-preserving import metadata, consent
+  revocation, organization impersonation denial, and cross-patient/tenant denial.
+- The complete targeted backend suite passed **73 tests**, with one PostgreSQL-
+  only audit concurrency test skipped.
+- `test_api.py` and `test_security.py` passed separately on isolated SQLite.
+- Migration `d4e8b2a1c9f7` passed through a fresh SQLite upgrade and `alembic
+  check` reported no drift.
+- Node/npm, disposable PostgreSQL, live HAPI, live Fabric, and browser
+  acceptance remain NOT VERIFIED.
+
+
 ## Latest Milestone 6 verification (2026-11-27)
 
 - Focused FHIR sync tests: **5 passed**. Coverage includes stable queue keys,

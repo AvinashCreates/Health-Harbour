@@ -32,6 +32,20 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 7 cross-hospital exchange status
+
+Milestone 7 adds a dedicated cross-hospital exchange request lifecycle and
+provenance-preserving document import records. Approved requests create the
+existing consent model. Cross-hospital document visibility remains restricted
+by source organization, processing status, active consent scope, expiry,
+revocation, provider verification, affiliation, and requesting organization.
+Document imports retain source and receiving organization IDs, source checksum,
+importing provider, consent reference, integrity verification, and audit
+history without copying document bytes.
+
+Two exchange security tests pass. Tenant isolation, live PostgreSQL/HAPI/Fabric,
+and browser acceptance remain unverified or require further infrastructure.
+
 ## Milestone 6 FHIR interoperability status
 
 Milestone 6 adds a durable FHIR synchronization outbox, stable resource payload

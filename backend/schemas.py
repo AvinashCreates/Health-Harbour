@@ -308,6 +308,60 @@ class ProviderProfileOut(BaseModel):
     decision_reason: str | None
 
 
+class CrossHospitalExchangeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    patient_id: str = Field(min_length=1, max_length=64)
+    requesting_organization_id: str = Field(min_length=1, max_length=64)
+    source_organization_id: str = Field(min_length=1, max_length=64)
+    resource_types: List[FHIRResourceType] = Field(min_length=1, max_length=8)
+    requested_duration_days: int = Field(ge=1, le=30)
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class CrossHospitalExchangeDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["APPROVED", "REJECTED", "REVOKED"]
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class CrossHospitalExchangeOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    requesting_organization_id: str
+    requesting_organization_name: str
+    requesting_provider_id: str
+    requesting_provider_name: str
+    source_organization_id: str
+    source_organization_name: str
+    resource_types: List[str]
+    purpose: str
+    requested_duration_days: int
+    reason: str
+    status: str
+    consent_id: str | None
+    response_reason: str | None
+    requested_at: datetime
+    responded_at: datetime | None
+    expires_at: datetime | None
+
+
+class CrossOrganizationDocumentImportOut(BaseModel):
+    id: str
+    exchange_request_id: str
+    source_document_id: str
+    source_organization_id: str
+    receiving_organization_id: str
+    importing_provider_id: str
+    consent_id: str
+    checksum: str
+    integrity_verified: bool
+    status: str
+    failure_reason: str | None
+    imported_at: datetime | None
+    created_at: datetime
+
+
 class RegistryHistoryOut(BaseModel):
     id: str
     decision: str
