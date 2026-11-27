@@ -32,6 +32,15 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 8.1 end-to-end clinical status
+
+Milestone 8.1 is locally validated as a partial pass. The complete synthetic
+clinical journey passes across order, laboratory workflow, report, observation,
+physician review, prescription, patient history, audit, and FHIR outbox state.
+The complete relevant backend suite passed 81 tests with one PostgreSQL-only
+skip. Node/npm build, browser acceptance, live PostgreSQL, live HAPI, Fabric,
+and ClamAV remain not verified.
+
 ## Milestone 10 clinical-workflow status
 
 Milestone 10 implements prescription and physician-review workflows. Existing

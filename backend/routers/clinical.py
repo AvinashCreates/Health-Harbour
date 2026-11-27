@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
@@ -60,14 +61,16 @@ def _review_out(db: Session, review: models.PhysicianClinicalReview) -> dict:
     }
 
 
-def _active_consent(db: Session, patient_id: str, provider_account_id: str, resource_type: str) -> bool:
+def _active_consent(db: Session, patient_id: str, provider_account_id: str, resource_type: str, organization_id: str | None = None) -> bool:
     consent = db.query(models.Consent).filter(
         models.Consent.patient_id == patient_id,
         models.Consent.grantee_id == provider_account_id,
         models.Consent.revoked_at.is_(None),
         models.Consent.expires_at > datetime.utcnow(),
-    ).all()
-    return any(resource_type in (item.resource_types or []) for item in consent)
+    )
+    if organization_id:
+        consent = consent.filter(or_(models.Consent.organization_id.is_(None), models.Consent.organization_id == organization_id))
+    return any(resource_type in (item.resource_types or []) for item in consent.all())
 
 
 @router.post("/prescriptions", response_model=schemas.PrescriptionOut, status_code=201)
@@ -80,7 +83,7 @@ def create_prescription(
     patient = db.query(models.User).filter(models.User.id == payload.patient_id, models.User.role == "patient").first()
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if not _active_consent(db, patient.id, current_user.id, "MedicationRequest"):
+    if not _active_consent(db, patient.id, current_user.id, "MedicationRequest", payload.organization_id):
         raise HTTPException(status_code=403, detail="Patient consent for MedicationRequest access is required")
 
     prescription = models.Prescription(
@@ -201,7 +204,7 @@ def create_clinical_review(
     patient = db.query(models.User).filter(models.User.id == payload.patient_id, models.User.role == "patient").first()
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if not _active_consent(db, patient.id, current_user.id, "DiagnosticReport"):
+    if not _active_consent(db, patient.id, current_user.id, "DiagnosticReport", payload.organization_id):
         raise HTTPException(status_code=403, detail="Patient consent for DiagnosticReport access is required")
 
     if payload.diagnostic_report_id:

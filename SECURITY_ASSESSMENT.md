@@ -114,6 +114,18 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 8.1 clinical integration findings (2026-11-27)
+
+- The synthetic end-to-end clinical journey passed through consent, laboratory
+  order/report/observation, physician review, prescription, patient history,
+  audit, and FHIR outbox stages.
+- Cross-patient and unauthorized prescription/review attempts are denied by
+  role, patient ownership, provider eligibility, and consent checks.
+- Report amendments are restricted to final/reviewed laboratory reports and
+  preserve previous conclusion, actor, reason, and FHIR synchronization state.
+- Live external infrastructure verification remains unavailable: PostgreSQL,
+  HAPI, Fabric, and ClamAV outcomes are not established by SQLite or mocks.
+
 ## Milestone 10 clinical workflow findings (2026-11-27)
 
 - Prescription creation requires verified provider eligibility and patient

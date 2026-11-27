@@ -35,14 +35,17 @@ class ClinicalWorkflowTests(unittest.TestCase):
         self.session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
 
         with self.session_factory() as db:
-            self.patient = self._user(db, "Synthetic Patient", "patient", "patient@example.test")
-            self.doctor = self._user(db, "Synthetic Doctor", "doctor", "doctor@example.test")
-            self.other_doctor = self._user(db, "Synthetic Other Doctor", "doctor", "other@example.test")
-            self.admin = self._user(db, "Synthetic Admin", "admin", "admin@example.test")
+            self.patient = self._user(db, "Synthetic Patient", "patient", "patient@example.com")
+            self.doctor = self._user(db, "Synthetic Doctor", "doctor", "doctor@example.com")
+            self.other_doctor = self._user(db, "Synthetic Other Doctor", "doctor", "other@example.com")
+            self.lab = self._user(db, "Synthetic Lab", "lab", "lab@example.com")
+            self.technician = self._user(db, "Synthetic Technician", "lab_technician", "tech@example.com")
+            self.admin = self._user(db, "Synthetic Admin", "admin", "admin@example.com")
             organization = models.HealthcareOrganization(
                 legal_name="Synthetic Hospital", display_name="Synthetic Hospital",
                 organization_type="HOSPITAL", administrative_contact_name="Admin",
                 administrative_contact_email="hospital@example.test", status="APPROVED",
+                legacy_user_id=self.lab.id,
             )
             db.add(organization)
             db.flush()
@@ -65,11 +68,16 @@ class ClinicalWorkflowTests(unittest.TestCase):
                 invited_by_id=self.admin.id,
                 effective_from=datetime.utcnow(),
             ))
+            db.add(models.LaboratoryMembership(
+                laboratory_id=self.lab.id,
+                technician_id=self.technician.id,
+                created_by=self.admin.id,
+            ))
             db.add(models.Consent(
                 patient_id=self.patient.id,
                 grantee_id=self.doctor.id,
                 organization_id=organization.id,
-                resource_types=["MedicationRequest", "DiagnosticReport"],
+                resource_types=["MedicationRequest", "DiagnosticReport", "ServiceRequest", "Observation", "Specimen", "Document"],
                 purpose="TREATMENT",
                 granted_at=datetime.utcnow(),
                 expires_at=datetime.utcnow() + timedelta(days=30),
@@ -91,6 +99,8 @@ class ClinicalWorkflowTests(unittest.TestCase):
             "patient": self._headers(self.patient.id),
             "doctor": self._headers(self.doctor.id),
             "other": self._headers(self.other_doctor.id),
+            "lab": self._headers(self.lab.id),
+            "technician": self._headers(self.technician.id),
         }
 
     def tearDown(self):
@@ -148,6 +158,166 @@ class ClinicalWorkflowTests(unittest.TestCase):
 
         cross_patient = self.client.get("/api/v1/prescriptions/me/patient", headers=self.headers["doctor"])
         self.assertEqual(cross_patient.status_code, 403)
+
+    def test_complete_clinical_journey_across_existing_workflows(self):
+        order = self.client.post(
+            "/fhir/ServiceRequest",
+            headers={**self.headers["doctor"], "Idempotency-Key": "m10-acceptance-order-1"},
+            json={
+                "patient_email": self.patient.email,
+                "lab_email": self.lab.email,
+                "test_code": "24323-8",
+                "test_display": "Synthetic comprehensive metabolic panel",
+                "note": "Synthetic acceptance journey",
+            },
+        )
+        self.assertEqual(order.status_code, 200, order.text)
+        service_request_id = order.json()["id"]
+
+        accepted = self.client.post(
+            f"/fhir/ServiceRequest/{service_request_id}/accept",
+            headers=self.headers["lab"],
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+
+        assigned = self.client.post(
+            f"/fhir/ServiceRequest/{service_request_id}/assign",
+            headers=self.headers["lab"],
+            json={"technician_email": self.technician.email},
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.text)
+
+        specimen = self.client.post(
+            f"/fhir/ServiceRequest/{service_request_id}/specimen",
+            headers=self.headers["technician"],
+            json={"type_code": "122555007", "type_display": "Venous blood specimen"},
+        )
+        self.assertEqual(specimen.status_code, 200, specimen.text)
+
+        processing = self.client.post(
+            f"/fhir/ServiceRequest/{service_request_id}/processing",
+            headers=self.headers["technician"],
+        )
+        self.assertEqual(processing.status_code, 200, processing.text)
+
+        results = self.client.post(
+            "/fhir/DiagnosticReport",
+            headers=self.headers["technician"],
+            json={
+                "service_request_id": service_request_id,
+                "observations": [{
+                    "code": "2345-7",
+                    "display": "Synthetic glucose",
+                    "value": 101.5,
+                    "unit": "mg/dL",
+                }],
+                "conclusion": "Synthetic preliminary result",
+            },
+        )
+        self.assertEqual(results.status_code, 200, results.text)
+        report_id = results.json()["id"]
+
+        finalized = self.client.post(
+            f"/fhir/ServiceRequest/{service_request_id}/finalize",
+            headers=self.headers["lab"],
+        )
+        self.assertEqual(finalized.status_code, 200, finalized.text)
+
+        review = self.client.post("/api/v1/clinical-reviews", headers=self.headers["doctor"], json={
+            "patient_id": self.patient.id,
+            "organization_id": self.organization_id,
+            "diagnostic_report_id": report_id,
+            "service_request_id": service_request_id,
+            "status": "REVIEWED",
+            "clinical_note": "Synthetic physician review",
+        })
+        self.assertEqual(review.status_code, 201, review.text)
+
+        prescription = self.client.post("/api/v1/prescriptions", headers=self.headers["doctor"], json={
+            "patient_id": self.patient.id,
+            "organization_id": self.organization_id,
+            "medication_name": "Synthetic Acceptance Medication",
+            "dosage": "1 synthetic unit",
+            "route": "oral",
+            "frequency": "once daily",
+            "duration": "7 days",
+            "quantity": "7 units",
+            "instructions": "Synthetic test instructions",
+            "activate": True,
+        })
+        self.assertEqual(prescription.status_code, 201, prescription.text)
+
+        patient_history = self.client.get("/api/v1/prescriptions/me/patient", headers=self.headers["patient"])
+        self.assertEqual(patient_history.status_code, 200)
+        self.assertEqual(len(patient_history.json()), 1)
+
+        patient_orders = self.client.get("/fhir/ServiceRequest", headers=self.headers["patient"])
+        self.assertEqual(patient_orders.status_code, 200)
+        self.assertEqual(len(patient_orders.json()), 1)
+
+        patient_reports = self.client.get("/fhir/DiagnosticReport", headers=self.headers["patient"])
+        self.assertEqual(patient_reports.status_code, 200)
+        self.assertEqual(len(patient_reports.json()), 1)
+
+        with self.session_factory() as db:
+            self.assertGreaterEqual(db.query(models.FHIRSyncOutbox).count(), 5)
+            self.assertGreaterEqual(db.query(models.AuditLog).count(), 10)
+
+    def test_finalized_report_amendment_preserves_history_and_rejects_unauthorized_users(self):
+        with self.session_factory() as db:
+            report = models.FHIRResource(
+                resource_type="DiagnosticReport",
+                fhir_id="synthetic-amended-report",
+                resource_data={
+                    "resourceType": "DiagnosticReport",
+                    "id": "synthetic-amended-report",
+                    "status": "final",
+                    "conclusion": "Original synthetic conclusion",
+                },
+                owner_id=self.patient.id,
+                created_by=self.lab.id,
+            )
+            db.add(report)
+            db.flush()
+            order = models.FHIRResource(
+                resource_type="ServiceRequest",
+                fhir_id="synthetic-amended-order",
+                resource_data={"resourceType": "ServiceRequest", "id": "synthetic-amended-order", "status": "active"},
+                owner_id=self.patient.id,
+                created_by=self.doctor.id,
+            )
+            db.add(order)
+            db.flush()
+            workflow = models.LaboratoryWorkflow(
+                service_request_id=order.id,
+                patient_id=self.patient.id,
+                physician_id=self.doctor.id,
+                laboratory_id=self.lab.id,
+                status="FINALIZED",
+                report_fhir_id=report.fhir_id,
+            )
+            db.add(workflow)
+            db.commit()
+
+        amended = self.client.post(
+            "/fhir/DiagnosticReport/synthetic-amended-report/amend",
+            headers=self.headers["lab"],
+            json={"conclusion": "Amended synthetic conclusion", "reason": "Synthetic correction required"},
+        )
+        self.assertEqual(amended.status_code, 200, amended.text)
+        self.assertEqual(amended.json()["resource"]["status"], "amended")
+
+        unauthorized = self.client.post(
+            "/fhir/DiagnosticReport/synthetic-amended-report/amend",
+            headers=self.headers["doctor"],
+            json={"conclusion": "Unauthorized conclusion", "reason": "Unauthorized attempt"},
+        )
+        self.assertIn(unauthorized.status_code, {403, 404})
+
+        with self.session_factory() as db:
+            amendment = db.query(models.LaboratoryReportAmendment).one()
+            self.assertEqual(amendment.previous_conclusion, "Original synthetic conclusion")
+            self.assertEqual(amendment.conclusion, "Amended synthetic conclusion")
 
     def test_physician_clinical_review_requires_consent_and_links_resources(self):
         report = models.FHIRResource(

@@ -1,454 +1,229 @@
-# HealthHarbor — Milestone 8: Clinical Workflow Implementation
+# HealthHarbor — Milestone 8.1: Clinical Workflow Integration & End-to-End Acceptance Testing
 
-## Project Location
-
+Project directory:
 `/home/pamarthi-avinash/Downloads/healthcare-exchange`
 
-You are continuing development of my existing final-year project, **HealthHarbor: A Secure, Consent-Aware FHIR and Permissioned Blockchain Framework for Interoperable Healthcare Data Exchange**.
+## Objective
 
-Your task is to implement Milestone 8: Clinical Workflows.
+Validate and integrate the existing clinical workflows into one coherent healthcare application.
 
-This is an existing full-stack application. You must extend its architecture rather than create a separate application or replace working modules.
+Milestone 8 has implemented:
+- Laboratory orders.
+- Laboratory reports and amendments.
+- Clinical observations and FHIR mappings.
+- Prescription lifecycle and history.
+- Physician clinical reviews.
+- Patient/provider prescription and review APIs.
+- Consent and authorization checks.
+- FHIR transactional outbox integration.
 
----
+Do not assume these features are fully integrated merely because their individual tests pass.
 
-# 1. Existing Technology Stack
+Your responsibility is to inspect, connect, test, and correct the existing implementation.
 
-Preserve and use the existing stack:
+## 1. Environment restrictions
 
-- Frontend: React + Vite
-- Backend: FastAPI + Python
-- ORM: SQLAlchemy
-- Database: PostgreSQL-compatible schema, with SQLite for local testing
-- Migrations: Alembic
-- Authentication: Keycloak OIDC/OAuth2 Authorization Code + PKCE, with existing local development authentication
-- Healthcare interoperability: HL7 FHIR R4 through HAPI FHIR integration
-- Blockchain: Hyperledger Fabric with Go chaincode and existing HTTP Gateway
-- Background processing: Existing FHIR transactional outbox and worker
-- Testing: Existing unittest conventions and security/API smoke tests
+- No Docker installation or downloads.
+- No HAPI FHIR installation.
+- No Hyperledger Fabric installation.
+- No PostgreSQL installation.
+- No unnecessary dependency downloads.
+- Use the existing Python environment and SQLite.
+- Use deterministic mocks for unavailable external infrastructure.
+- Do not claim mocked integrations are live integrations.
 
-Inspect the actual repository before implementation. Do not assume filenames, model structures, endpoints, or frontend routes without inspecting them.
-
-# 2. Environment Constraints
-
-My laptop currently has limited resources and mobile data.
-
-Therefore:
-
-- Do not install Docker.
-- Do not download Docker images.
-- Do not install HAPI FHIR or Hyperledger Fabric locally.
-- Do not install PostgreSQL solely for this milestone.
-- Do not introduce large dependencies without a strong reason.
-- Use the existing Python environment and SQLite for local testing.
-- Mock unavailable external infrastructure.
-- Clearly distinguish mocked integration tests from real infrastructure verification.
-
-Do not sacrifice architectural correctness just to make local tests pass.
-
-# 3. Critical Security and Preservation Rules
-
-These requirements are mandatory.
-
-1. Preserve existing authentication and authorization.
-2. Never allow users to assign privileged roles to themselves.
-3. Patient ownership must be verified on every patient-sensitive operation.
-4. Provider verification and organization affiliation must be checked.
-5. Care connection does not automatically grant clinical record access.
-6. An access request does not equal consent.
-7. Organization affiliation does not equal consent.
-8. FHIR resource existence does not equal authorization.
-9. Blockchain confirmation does not equal authorization.
-10. Every sensitive clinical operation must verify current consent, resource scope, expiry, revocation, organization status, and relevant user permissions.
-11. Clinical files must remain in private application storage.
-12. Never place clinical document contents, prescriptions, laboratory results, or personal health information on the blockchain.
-13. Blockchain must contain only the existing approved tamper-evident event metadata and pseudonymous references/hashes.
-14. Do not weaken existing security checks to make a workflow function.
-15. Use synthetic clinical data only.
-
-Preservation:
+## 2. Preservation rules
 
 - Inspect Git status before changes.
-- Preserve all existing uncommitted work.
-- Never use `git reset --hard`.
-- Never use `git clean`.
-- Never commit changes unless explicitly authorized.
-- Never experiment on my existing PostgreSQL database.
-- Historical audit entry #33 must remain completely untouched.
+- Preserve all uncommitted work.
+- Never use `git reset --hard` or `git clean`.
+- Do not commit changes.
+- Do not use the existing PostgreSQL database.
+- Do not alter historical audit entry #33.
 - Never rewrite, delete, repair, or re-hash historical audit records.
+- Use synthetic healthcare data exclusively.
 
-# 4. First: Repository and Architecture Inspection
+## 3. Inspect existing implementation
 
-Before coding, inspect:
+Review:
 
-- Existing user, patient, provider, organization, and affiliation models.
-- ClinicalFile and document metadata models.
-- Consent and access-request models.
-- Cross-hospital exchange implementation.
-- FHIRSyncOutbox and worker.
-- Existing FHIR resource mappings.
-- Audit logger and blockchain event allowlist.
-- Existing API routers and authorization dependencies.
-- React dashboards and API client.
-- Existing test suites and migration history.
+- Lab order models and APIs.
+- DiagnosticReport APIs and amendment history.
+- Observation models and mappings.
+- Prescription lifecycle APIs.
+- Physician review APIs.
+- Patient, doctor, and laboratory dashboards.
+- Authentication and authorization dependencies.
+- Consent and organization affiliation checks.
+- FHIR transactional outbox.
+- Audit logger and blockchain allowlist.
+- Frontend API client and routing.
 
-Identify reusable components and avoid duplicating existing functionality.
+Identify broken connections, missing API calls, inconsistent identifiers, incorrect state transitions, and missing authorization checks.
 
-Produce a short implementation plan before making changes.
+Do not duplicate existing functionality.
 
-# 5. Clinical Workflow Architecture
+## 4. End-to-end clinical workflow
 
-Implement these workflows in a coherent manner.
+Build an automated integration test using synthetic users and records.
 
-## A. Lab Orders
+Simulate this complete journey:
 
-Doctors should be able to create laboratory diagnostic orders for their patients.
+1. Create a synthetic patient.
+2. Create a verified doctor and healthcare organization.
+3. Establish the required care relationship.
+4. Grant appropriate patient consent.
+5. Doctor creates a laboratory order.
+6. Authorized laboratory personnel retrieve the order.
+7. Laboratory personnel submit a diagnostic report.
+8. Create associated clinical observations.
+9. Doctor retrieves the authorized report and observations.
+10. Doctor records a clinical review.
+11. Doctor creates a prescription.
+12. Patient retrieves their authorized clinical history.
+13. Verify audit events and FHIR outbox entries.
 
-Requirements:
+Use the existing models, services, APIs, and authorization architecture.
 
-- Only verified and authorized healthcare providers may create orders.
-- Patient must have an appropriate care relationship.
-- Validate patient identity and provider organization.
-- Capture test name, clinical indication, priority, ordering provider, patient, organization, creation time, and status.
-- Support order statuses such as draft, active, cancelled, completed.
-- Patients should be able to view their authorized orders.
-- Laboratory personnel should see only orders assigned to their organization and within their authorization scope.
-- Prevent unauthorized modifications.
-- Record relevant state transitions in the audit log.
+Do not bypass authorization by directly manipulating internal state to make the workflow succeed.
 
-FHIR mapping:
+## 5. Negative security scenarios
 
-- Use FHIR ServiceRequest.
-- Maintain stable resource identifiers.
-- Synchronize through the existing FHIR outbox.
-- Do not directly bypass the outbox for ordinary background synchronization.
+Test:
 
-## B. Laboratory Reports
-
-Implement diagnostic report submission by authorized laboratory personnel.
-
-Requirements:
-
-- Only verified lab personnel with appropriate organizational affiliation may submit results.
-- Reports must reference valid orders.
-- Verify patient and organization ownership.
-- Capture report title, test details, result summary, interpretation, issuing laboratory, author, and timestamps.
-- Support report states such as preliminary, final, amended, and cancelled.
-- Prevent unauthorized changes to finalized reports.
-- Maintain report history and traceable amendments.
-- Support private file attachments using existing secure file storage.
-- Never expose private files through public or predictable storage paths.
-
-FHIR mapping:
-
-- Use DiagnosticReport.
-- Use DocumentReference for appropriate report attachments.
-- Link reports to their ServiceRequest.
-- Synchronize through FHIRSyncOutbox.
-
-Do not store real patient data in development fixtures.
-
-## C. Clinical Observations
-
-Implement structured clinical observations associated with laboratory reports and patients.
-
-Requirements:
-
-- Support suitable observation categories.
-- Capture observation code, display name, value, unit, reference range when available, interpretation, effective date, performer, and status.
-- Validate values and units.
-- Preserve the distinction between missing, unknown, and zero values.
-- Link observations to the correct patient and report.
-- Restrict access using current authorization and consent.
-- Maintain appropriate audit events.
-
-FHIR mapping:
-
-- Use FHIR Observation.
-- Use appropriate references to Patient, DiagnosticReport, and ServiceRequest where applicable.
-- Ensure stable identifiers and valid references.
-
-Do not invent medical diagnoses or automatically interpret results as a clinical decision.
-
-## D. Prescriptions
-
-Implement a prescription workflow for verified healthcare providers.
-
-Requirements:
-
-- Only authorized providers may create prescriptions.
-- Validate patient and provider authorization.
-- Capture medication name, dosage, route, frequency, duration, quantity, instructions, author, and timestamps where applicable.
-- Validate required fields.
-- Support draft, active, cancelled, completed, and stopped states where appropriate.
-- Patients may view their authorized prescriptions.
-- Unauthorized users must not modify prescriptions.
-- Maintain amendment and cancellation history.
-- Do not implement medication dispensing or pharmacy integrations unless existing architecture already supports them.
-
-FHIR mapping:
-
-- Use FHIR MedicationRequest.
-- Use Medication and dosage structures appropriately.
-- Synchronize through the existing FHIR outbox.
-
-Do not invent prescriptions or recommend medication dosages.
-
-## E. Physician Review
-
-Implement a workflow for doctors to review diagnostic reports and observations.
-
-Requirements:
-
-- Only authorized providers may review clinical results.
-- Verify patient identity, organization affiliation, and current consent.
-- Display linked orders, reports, and observations.
-- Allow a doctor to record a review status and clinical note.
-- Support pending, reviewed, and follow-up-required states.
-- Record reviewing provider and review timestamp.
-- Maintain an audit trail.
-- Do not automatically convert laboratory results into diagnoses.
-
-FHIR mapping:
-
-- Use appropriate FHIR DiagnosticReport and Observation references.
-- Consider Task or another suitable FHIR resource for workflow tracking where justified.
-- Keep local workflow state and FHIR state consistent through the existing outbox.
-
-# 6. Patient Dashboard
-
-Extend the existing React application.
-
-Patients should be able to view:
-
-- Their laboratory orders.
-- Order status.
-- Available diagnostic reports.
-- Associated observations.
-- Prescriptions.
-- Physician review status.
-- Relevant clinical history.
-
-Requirements:
-
-- Use the existing authentication flow.
-- Fetch data through authenticated backend APIs.
-- Display loading, empty, error, and unauthorized states.
-- Never expose another patient's information.
-- Do not rely on frontend hiding as an authorization mechanism.
-- Preserve existing UI architecture and styling conventions.
-
-# 7. Provider Dashboard
-
-Extend the existing provider dashboard.
-
-Provide appropriate workflows for:
-
-- Creating laboratory orders.
-- Viewing authorized patient orders.
-- Reviewing laboratory reports.
-- Viewing structured observations.
-- Creating prescriptions.
-- Recording physician reviews.
-- Viewing relevant workflow history.
-
-Do not give every provider access to every patient.
-
-# 8. Laboratory Dashboard
-
-If the existing role and organization architecture supports it, implement a laboratory dashboard.
-
-It should support:
-
-- Viewing orders assigned to the authorized laboratory organization.
-- Viewing order details within permitted scope.
-- Submitting preliminary and final reports.
-- Managing report amendments through traceable operations.
-- Viewing submission status.
-
-Do not allow lab personnel to impersonate doctors or modify prescriptions.
-
-# 9. Authorization and Consent Enforcement
-
-This is one of the most important parts of the milestone.
-
-Every clinical endpoint must enforce server-side authorization.
-
-Implement reusable authorization logic where appropriate.
-
-Test these scenarios:
-
-- Patient attempts to access another patient's records.
-- Doctor accesses a patient without a valid care relationship.
-- Doctor accesses a patient without appropriate consent.
+- Patient accesses another patient's order.
+- Doctor accesses a patient without valid consent.
+- Lab personnel access another organization's order.
+- Unauthorized user submits a report.
+- Lab personnel modify a finalized report.
+- Unauthorized user creates a prescription.
+- Provider accesses records after affiliation becomes inactive.
+- Organization becomes inactive.
 - Consent expires.
 - Consent is revoked.
-- Consent does not include the requested resource type.
-- Provider affiliation becomes inactive.
-- Organization becomes inactive.
-- Lab personnel attempt to access another organization's orders.
-- Lab personnel attempt to modify a finalized report.
-- Unauthorized user attempts prescription creation.
-- Unauthorized user attempts clinical report modification.
+- A user attempts to retrieve a clinical file after consent revocation.
+- A user accesses a resource outside the consent scope.
 
-Recheck authorization before sensitive file downloads and clinical mutations.
+Verify that the backend denies unauthorized operations.
 
-Avoid relying on authorization checks performed only when a page is first loaded.
+Test authorization at the API/service boundary, not merely through frontend visibility.
 
-# 10. FHIR Synchronization
+## 6. FHIR consistency
 
-Integrate all new clinical entities with the existing FHIR synchronization architecture.
+Verify locally that:
 
-Required mappings:
+- ServiceRequest represents laboratory orders.
+- DiagnosticReport represents laboratory reports.
+- Observation represents structured results.
+- MedicationRequest represents prescriptions.
+- Task or another suitable resource represents workflow tracking where implemented.
+- Patient, Practitioner, and Organization references are valid.
+- Resource identifiers remain stable.
+- FHIR outbox entries are created for relevant changes.
+- Duplicate processing does not create duplicate resources.
+- Failures remain traceable.
 
-| Clinical workflow | FHIR resource |
-|---|---|
-| Laboratory order | ServiceRequest |
-| Laboratory report | DiagnosticReport |
-| Clinical observation | Observation |
-| Report attachment | DocumentReference |
-| Prescription | MedicationRequest |
-| Workflow tracking | Task, where appropriate |
+Use mocked HAPI responses.
 
-Requirements:
+Do not claim live FHIR interoperability.
 
-- Stable resource identifiers.
-- Valid resource references.
-- Correct patient references.
-- Correct organization and practitioner references.
-- Idempotent event processing.
-- Retry and permanent-failure handling through existing outbox logic.
-- No duplicate resources from repeated processing.
-- Useful synchronization status and error visibility.
-- Reconciliation support where already available.
+## 7. Frontend integration
 
-Do not claim that live HAPI synchronization works unless it is actually tested against a live HAPI instance.
+Inspect the actual React implementation.
 
-# 11. Audit and Blockchain Integration
+Verify:
 
-Extend existing audit and blockchain allowlist behavior carefully.
+- Patient can see their orders and reports.
+- Patient can see authorized prescriptions and review status.
+- Doctor can create orders.
+- Doctor can review reports.
+- Doctor can create prescriptions.
+- Laboratory personnel can retrieve assigned orders.
+- Laboratory personnel can submit reports.
+- Loading, error, empty, and unauthorized states are handled.
+- API responses are correctly represented in the UI.
+- No hardcoded fake success messages or dummy clinical records are used in production-facing components.
 
-Record security-relevant events such as:
+Check navigation, route protection, API client consistency, and form validation.
 
-- Laboratory order creation and cancellation.
-- Report submission and amendment.
-- Observation creation and amendment.
-- Prescription creation and cancellation.
-- Physician review.
-- Unauthorized clinical access attempts.
-- FHIR synchronization success or failure where appropriate.
+If Node/npm are unavailable, do not install them. Perform static inspection and document the limitation.
 
-Use the existing audit architecture.
+## 8. State transition validation
 
-Never store clinical data in blockchain transactions.
+Inspect all clinical workflow state transitions.
 
-Use only approved metadata and pseudonymous references.
+Ensure:
 
-Do not modify historical audit records.
+- Invalid transitions are rejected.
+- Finalized reports cannot be silently modified.
+- Amendments preserve history.
+- Cancelled prescriptions cannot be silently reactivated.
+- Physician reviews have traceable authorship and timestamps.
+- Order and report status remain consistent.
+- Invalid cross-patient and cross-organization references are rejected.
 
-# 12. Database and Migrations
+Add tests for any gaps discovered.
 
-Implement SQLAlchemy models and Alembic migrations as required.
+## 9. Documentation repair
 
-Requirements:
+Earlier Copilot execution reported failed edits to:
+- IMPLEMENTATION_STATUS.md
+- SECURITY_ASSESSMENT.md
 
-- Appropriate foreign keys.
-- Unique constraints where needed.
-- Indexes for common patient, provider, organization, and status queries.
-- Correct deletion behavior.
-- Explicit state-transition validation.
-- Avoid duplicate or unnecessary models.
-- Preserve PostgreSQL compatibility.
-- Test migrations against a new disposable SQLite database.
+Inspect both documents.
 
-Never use my existing PostgreSQL database for experimental migrations.
+Update them accurately to reflect Milestones 7.2, 8, and 8.1.
 
-# 13. Testing Requirements
+Do not delete historical findings or rewrite previous validation results. Append or revise current-status sections while preserving useful history.
 
-Add meaningful backend tests for:
-
-- Lab order creation and authorization.
-- Lab order cancellation.
-- Lab report submission.
-- Invalid report-to-order relationships.
-- Report amendment and finalization restrictions.
-- Observation validation and access control.
-- Prescription creation and authorization.
-- Prescription cancellation and amendment.
-- Physician review.
-- Consent revocation and expiry.
-- Cross-patient access denial.
-- Cross-organization access denial.
-- FHIR outbox event creation.
-- Duplicate synchronization processing.
-- Audit event generation.
-
-Frontend checks should cover available static diagnostics and existing build tooling.
-
-Use deterministic synthetic test fixtures.
-
-Do not weaken security checks just to pass tests.
-
-# 14. Validation
+## 10. Validation
 
 Run available checks:
 
-- Focused new backend tests.
-- Existing relevant backend regression suite.
+- Focused clinical workflow tests.
+- Complete relevant backend regression suite.
 - API smoke tests.
 - Security smoke tests.
 - Python compilation.
 - SQLite Alembic migration chain.
-- `alembic check`.
+- Alembic schema check.
 - `git diff --check`.
-- Frontend diagnostics and build if Node/npm are already available.
+- Frontend diagnostics and build if available.
 
-Do not install Node or download large packages merely to force a frontend build.
+Record exact results and test counts.
 
-Clean up only temporary files created by this task. Do not delete existing project files or user work.
+Clean only temporary data created by this task.
 
-# 15. Completion Report
+## 11. Final report
 
-At the end, provide:
+Provide:
 
-1. Architecture inspected.
-2. Implementation plan followed.
-3. Features implemented.
-4. Database models and migration details.
-5. Backend endpoints added or modified.
-6. Frontend screens and components added or modified.
-7. FHIR mappings implemented.
-8. Consent and authorization protections.
-9. Audit and blockchain integration.
-10. Exact test counts and results.
-11. Migration and validation results.
-12. Git status.
-13. Confirmation that no commit was created.
-14. Confirmation that historical audit entry #33 was untouched.
-15. Limitations and integrations not verified.
+1. Files inspected.
+2. Files changed.
+3. End-to-end workflow results.
+4. Security test results.
+5. Frontend integration findings.
+6. FHIR resource validation results.
+7. Audit and outbox validation.
+8. Documentation updates.
+9. Exact test counts.
+10. Migration results.
+11. Git status.
+12. Confirmation no commit was created.
+13. Confirmation audit entry #33 remains untouched.
+14. Remaining defects and limitations.
 
-Classify every important result as:
-
+Classify findings as:
 - Implemented.
 - Locally tested.
 - Mocked integration tested.
 - Live infrastructure verified.
 - Not verified.
 
-## Completion Standard
+## Completion criteria
 
-Do not mark the entire milestone complete merely because the code compiles.
+Do not mark Milestone 8.1 complete unless the main clinical journey works across the existing backend and available frontend implementation, and the security scenarios pass.
 
-The clinical workflows must work coherently across backend, frontend, authorization, persistence, audit, and FHIR outbox integration.
+If defects are discovered, fix them safely and rerun the affected tests.
 
-If the full milestone is too large to implement safely in one pass, complete it incrementally in this order:
-
-1. Lab Orders.
-2. Laboratory Reports.
-3. Clinical Observations.
-4. Prescriptions.
-5. Physician Review.
-6. Patient, Provider, and Laboratory dashboards.
-7. Full regression and security validation.
-
-Start by inspecting the repository and Git status. Preserve existing functionality and uncommitted work. Do not commit.
+Start with repository inspection and Git status. Work incrementally. Preserve all existing user work. Do not commit.

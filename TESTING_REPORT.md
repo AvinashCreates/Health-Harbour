@@ -1,5 +1,23 @@
 # Testing report
 
+## Milestone 8.1 end-to-end clinical-workflow verification (2026-11-27)
+
+- Complete synthetic clinical journey passed: patient, consent, doctor lab
+  order, laboratory acceptance/assignment/specimen, observations, report,
+  physician review, prescription, patient history, audit entries, and FHIR
+  outbox entries.
+- Added report-amendment coverage and prescription/report security scenarios.
+- Complete relevant backend suite: **81 tests passed, 1 PostgreSQL-only audit
+  concurrency test skipped**.
+- `test_api.py` and `test_security.py` passed on separate disposable SQLite
+  databases.
+- Alembic upgrade through `e8d1a4c7b2f5_clinical_prescriptions_reviews` passed;
+  `alembic check` reported no drift.
+- Python compilation and `git diff --check` passed.
+- Frontend static diagnostics found no errors in modified React files.
+- Node/npm, browser automation, PostgreSQL, live HAPI, live Fabric, and live
+  ClamAV remain unavailable and unverified.
+
 ## Latest Milestone 10 clinical-workflow verification (2026-11-27)
 
 - Added two focused clinical workflow tests covering prescription lifecycle,

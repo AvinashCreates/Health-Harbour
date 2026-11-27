@@ -22,6 +22,19 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 8.1 end-to-end clinical integration
+
+- A synthetic end-to-end journey now passes across patient consent, lab order,
+  laboratory assignment/specimen/processing/report, observations, physician
+  review, prescription, patient history, audit logging, and FHIR outbox queue.
+- Prescription lifecycle, physician review, and report amendment APIs remain
+  consent/ownership/affiliation constrained. Finalized reports require authorized
+  laboratory role and report amendment retains prior conclusion and actor/reason.
+- The complete relevant backend suite passed 81 tests with one PostgreSQL-only
+  audit test skipped. API/security smoke scripts pass on disposable SQLite.
+- Frontend static diagnostics pass; Node/npm build and browser acceptance remain
+  unavailable. Live PostgreSQL, HAPI, Fabric, and ClamAV are unverified.
+
 ## Milestone 10 clinical workflows
 
 - Added `Prescription`, `PrescriptionHistory`, `PhysicianClinicalReview`, and
