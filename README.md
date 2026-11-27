@@ -159,7 +159,8 @@ restricted to that workflow. Patients can remove files from their own record,
 including files uploaded by their care team. Administrators do not receive
 clinical-file access.
 
-File bytes are stored off-chain in a private local directory (`backend/uploads`
+File bytes are stored off-chain behind the `LocalDocumentStorage` adapter in a
+private local directory (`backend/uploads`
 by default) and are exposed only through authenticated API downloads.
 `DocumentReference` resources contain metadata and a protected download URL;
 clinical file contents are not written to the audit ledger. Compose uses a

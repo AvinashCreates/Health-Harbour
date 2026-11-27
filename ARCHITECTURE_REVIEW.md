@@ -56,7 +56,9 @@ preserved and not normalized or reverted.
    transactional outbox to the Go HTTP adapter. Go chaincode verifies and
    persists permitted events; a successful outbox delivery is distinct from
    a live-ledger verification until commit is confirmed.
-6. Clinical file bytes are stored in the separate `clinical_files` volume,
+6. Clinical file bytes are stored outside the publicly served frontend through
+   `services/document_storage.py`. The local adapter uses generated keys,
+   private directory/file modes, and no exposed storage paths.
    not in PostgreSQL or Fabric. The database stores metadata and a digest.
 7. `services/audit_logger.py` maintains the application hash chain. It is
    separate from the Fabric ledger and does not repair historical records.

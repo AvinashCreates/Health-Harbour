@@ -18,6 +18,7 @@ from deps import get_current_user
 from services import audit_logger, fhir_builder
 from services.consent_access import consented_patient_ids, has_active_consent
 from services.fhir_server import authoritative_resource, fhir_mode, persist_resource
+from services.document_storage import get_document_storage
 
 router = APIRouter(prefix="/files", tags=["clinical files"])
 logger = logging.getLogger(__name__)
@@ -33,14 +34,19 @@ MEDIA_TYPES = {
     ".csv": "text/csv",
 }
 CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,39}$")
+DOCUMENT_CATEGORIES = {
+    "laboratory-report",
+    "prescription",
+    "diagnostic-report",
+    "medical-certificate",
+    "clinical-note",
+    "discharge-summary",
+    "clinical-record",
+    "lab-result",
+    "imaging",
+    "other",
+}
 
-
-def _storage_root() -> Path:
-    configured = os.getenv("FILE_STORAGE_PATH", "uploads")
-    path = Path(configured)
-    if not path.is_absolute():
-        path = Path(__file__).resolve().parents[1] / path
-    return path.resolve()
 
 
 def _active_document_consent(db: Session, patient_id: str, physician_id: str) -> bool:
@@ -120,7 +126,15 @@ def _accessible_file_or_404(
         models.ClinicalFile.id == file_id,
         models.ClinicalFile.deleted_at.is_(None),
     ).first()
-    if file_record is None or not _can_access(db, file_record, user):
+    if file_record is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    if not _can_access(db, file_record, user):
+        audit_logger.log_event(db, user.id, "DOCUMENT_ACCESS_DENIED", {
+            "patient_id": file_record.patient_id,
+            "resource_id": file_record.id,
+            "resource_type": "DocumentReference",
+            "outcome": "denied",
+        })
         raise HTTPException(status_code=404, detail="File not found")
     return file_record
 
@@ -159,6 +173,14 @@ def _safe_filename(filename: str | None) -> str:
     if not candidate or len(candidate) > 180:
         raise HTTPException(status_code=422, detail="Filename must be between 1 and 180 characters")
     return candidate
+
+
+def _audit_upload_rejection(db: Session, user: models.User, reason: str, category: str | None = None) -> None:
+    audit_logger.log_event(db, user.id, "DOCUMENT_UPLOAD_REJECTED", {
+        "outcome": "rejected",
+        "reason": reason,
+        "category": category,
+    })
 
 
 def _build_document_reference(
@@ -318,8 +340,9 @@ async def upload_file(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if not CATEGORY_PATTERN.fullmatch(category):
-        raise HTTPException(status_code=422, detail="Invalid file category")
+    if not CATEGORY_PATTERN.fullmatch(category) or category not in DOCUMENT_CATEGORIES:
+        _audit_upload_rejection(db, current_user, "unsupported category", category)
+        raise HTTPException(status_code=422, detail="Unsupported clinical document category")
     if current_user.role == "admin":
         raise HTTPException(status_code=403, detail="Administrators cannot upload clinical files")
 
@@ -374,17 +397,31 @@ async def upload_file(
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    original_filename = _safe_filename(file.filename)
+    try:
+        original_filename = _safe_filename(file.filename)
+    except HTTPException:
+        _audit_upload_rejection(db, current_user, "unsafe filename", category)
+        raise
     content = await file.read(MAX_FILE_BYTES + 1)
     if len(content) > MAX_FILE_BYTES:
+        _audit_upload_rejection(db, current_user, "file too large", category)
         raise HTTPException(status_code=413, detail="Files must be 10 MB or smaller")
-    _, media_type = _validate_file_content(original_filename, content)
+    try:
+        _, media_type = _validate_file_content(original_filename, content)
+    except HTTPException as exc:
+        _audit_upload_rejection(db, current_user, exc.detail, category)
+        raise
+    digest = hashlib.sha256(content).hexdigest()
+    duplicate = db.query(models.ClinicalFile.id).filter(
+        models.ClinicalFile.patient_id == patient.id,
+        models.ClinicalFile.sha256 == digest,
+        models.ClinicalFile.deleted_at.is_(None),
+    ).first()
+    if duplicate:
+        _audit_upload_rejection(db, current_user, "duplicate document checksum", category)
+        raise HTTPException(status_code=409, detail="An identical active document has already been uploaded")
     file_id = str(uuid.uuid4())
     storage_key = f"{uuid.uuid4().hex}.blob"
-    storage_root = _storage_root()
-    storage_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    storage_path = storage_root / storage_key
-    digest = hashlib.sha256(content).hexdigest()
     timestamp = datetime.utcnow()
     file_record = models.ClinicalFile(
         id=file_id,
@@ -410,10 +447,10 @@ async def upload_file(
     )
 
     persisted_reference = None
+    storage = get_document_storage()
+    storage_path = None
     try:
-        with storage_path.open("xb") as stored:
-            stored.write(content)
-        storage_path.chmod(0o600)
+        storage_path = storage.write_new(storage_key, content)
         persisted_reference = persist_resource(document_reference)
         db.add(file_record)
         db.add(models.FHIRResource(
@@ -427,7 +464,8 @@ async def upload_file(
         db.refresh(file_record)
     except Exception:
         db.rollback()
-        storage_path.unlink(missing_ok=True)
+        if storage_path is not None:
+            storage_path.unlink(missing_ok=True)
         if persisted_reference is not None and fhir_mode() == "hapi":
             try:
                 persist_resource({**persisted_reference, "status": "entered-in-error"})
@@ -452,8 +490,9 @@ def download_file(
     current_user: models.User = Depends(get_current_user),
 ):
     file_record = _accessible_file_or_404(db, file_id, current_user)
-    storage_path = _storage_root() / file_record.storage_key
-    if not storage_path.is_file():
+    storage = get_document_storage()
+    storage_path = storage.path_for(file_record.storage_key)
+    if not storage.exists(file_record.storage_key):
         raise HTTPException(status_code=410, detail="The file is no longer available")
     audit_logger.log_event(db, current_user.id, "DATA_ACCESSED", {
         "patient_id": file_record.patient_id,
@@ -501,13 +540,14 @@ def delete_file(
             "DocumentReference", file_record.id, previous_reference,
         )
     deleted_reference = {**previous_reference, "status": "entered-in-error"}
-    storage_path = _storage_root() / file_record.storage_key
-    tombstone_path = storage_path.with_name(f".{file_record.id}.deleting")
-    if storage_path.exists():
-        try:
-            os.replace(storage_path, tombstone_path)
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail="Unable to remove the stored file") from exc
+    storage = get_document_storage()
+    try:
+        storage_path, tombstone_path = storage.remove_to_tombstone(
+            file_record.storage_key,
+            f".{file_record.id}.deleting",
+        )
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail="Unable to remove the stored file") from exc
     try:
         persisted_reference = persist_resource(deleted_reference)
     except Exception:

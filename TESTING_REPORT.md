@@ -1,5 +1,24 @@
 # Testing report
 
+## Latest Milestone 4 verification (2026-11-27)
+
+- The focused `test_files` suite passed **12 tests**, including duplicate
+  detection, category rejection, denied-download auditing, consent revocation,
+  expiry, organization membership, bounded listings, FHIR DocumentReference
+  metadata, and lab/technician isolation.
+- The targeted regression suite passed **60 tests**, with one PostgreSQL-only
+  audit concurrency test skipped.
+- `test_api.py` and `test_security.py` passed separately on fresh isolated
+  SQLite databases.
+- Alembic upgrade through `f4c1a6d2e9b7` and `alembic check` passed on a fresh
+  SQLite database. No migration or write was made to the existing PostgreSQL
+  database.
+- PostgreSQL tooling and Docker were unavailable, so disposable PostgreSQL
+  migration verification remains NOT TESTED. Node/npm and a browser harness
+  were unavailable, so the updated frontend build and browser acceptance remain
+  NOT VERIFIED.
+
+
 ## Latest Milestone 3 verification (2026-11-27)
 
 - `test_care_requests.py`: 4 Milestone 3 tests passed. Coverage includes

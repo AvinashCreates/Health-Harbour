@@ -114,6 +114,23 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 4 clinical document controls (2026-11-27)
+
+- Clinical files remain private to backend-controlled local storage. A storage
+  adapter validates generated storage keys and writes files with private modes.
+  API responses expose document IDs and metadata, never internal storage paths.
+- Uploads are limited to allowlisted extensions/MIME signatures and 10 MiB;
+  filenames and categories are validated and duplicate active checksums are
+  rejected.
+- Every download is reauthorized against current ownership, consent scope,
+  provider verification, affiliation, organization approval, expiry, and
+  revocation state. Denied attempts generate audit events without content.
+- Upload rejections and denied downloads are audited. Clinical contents,
+  passwords, tokens, and storage paths are not included in audit payloads.
+- Application-level encryption-at-rest and antivirus scanning are still absent;
+  HTTPS is not treated as storage encryption. Live HAPI Binary/DocumentReference
+  persistence and Fabric delivery remain unverified.
+
 ## Milestone 3 care workflow controls (2026-11-27)
 
 - Care connections and record requests are owned by patient/provider and

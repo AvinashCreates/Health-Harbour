@@ -32,6 +32,19 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 4 document exchange status
+
+The existing clinical-file implementation was strengthened with an explicit
+local storage adapter, allowlisted document categories, duplicate checksum
+rejection, upload-rejection audit events, and denied-download audit events.
+Provider downloads remain governed by current consent, provider, affiliation,
+and organization state. FHIR DocumentReference metadata is still mirrored in
+local/HAPI modes as previously implemented.
+
+No new database migration is required. PostgreSQL migration verification,
+Node/npm build, browser acceptance, live HAPI, live Fabric, encryption-at-rest
+KMS, and antivirus scanning remain not verified or not implemented.
+
 ## Current master-prompt milestone
 
 Milestone 3 patient discovery and provider connection workflows are

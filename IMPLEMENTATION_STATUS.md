@@ -22,6 +22,23 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 4 clinical document exchange
+
+- Reused the existing private `ClinicalFile` model and `/files` API rather
+  than adding duplicate document metadata.
+- Added a `LocalDocumentStorage` adapter with generated storage keys,
+  0700 directories, 0600 files, and path/key validation.
+- Added allowlisted laboratory, prescription, diagnostic, certificate, clinical,
+  discharge, imaging, clinical-record, and lab-result categories.
+- Added duplicate checksum rejection for active patient documents.
+- Added audit events for upload rejection and denied document downloads.
+- Existing provider/organization/current-consent checks remain authoritative;
+  revocation, expiry, provider suspension, organization suspension, and
+  affiliation loss block downloads.
+- No application-level encryption or antivirus integration is implemented.
+  HAPI persistence remains synchronous and FHIR retry/outbox behavior is not
+  claimed as live-verified.
+
 ## Milestone 3 patient-provider care implementation
 
 - Added `CareConnection` and `ProviderRecordRequest` models plus additive

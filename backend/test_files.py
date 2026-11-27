@@ -440,6 +440,46 @@ class ClinicalFileApiTests(unittest.TestCase):
             403,
         )
 
+    def test_duplicate_document_and_category_rejections_are_safe(self):
+        first = self._upload_patient_file(self.patient)
+        self.assertEqual(first.status_code, 201, first.text)
+        duplicate = self._upload_patient_file(self.patient)
+        self.assertEqual(duplicate.status_code, 409)
+
+        unsupported = self.client.post(
+            "/files",
+            headers=self._headers(self.patient),
+            files={"file": ("record.txt", b"Synthetic record", "text/plain")},
+            data={"category": "executable"},
+        )
+        self.assertEqual(unsupported.status_code, 422)
+        db = self.session_factory()
+        try:
+            rejected = db.query(models.AuditLog).filter_by(
+                event_type="DOCUMENT_UPLOAD_REJECTED",
+            ).first()
+            self.assertIsNotNone(rejected)
+        finally:
+            db.close()
+
+    def test_denied_download_is_audited_without_accessing_bytes(self):
+        uploaded = self._upload_patient_file(self.patient)
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        denied = self.client.get(
+            f"/files/{uploaded.json()['id']}/download",
+            headers=self._headers(self.doctor),
+        )
+        self.assertEqual(denied.status_code, 404)
+        db = self.session_factory()
+        try:
+            event = db.query(models.AuditLog).filter_by(
+                event_type="DOCUMENT_ACCESS_DENIED",
+            ).first()
+            self.assertIsNotNone(event)
+            self.assertEqual(event.event_payload["resource_id"], uploaded.json()["id"])
+        finally:
+            db.close()
+
     def test_file_validation_rejects_unsupported_mismatched_and_oversized_files(self):
         unsupported = self._upload_patient_file(self.patient, "script.html", b"<script>alert(1)</script>")
         self.assertEqual(unsupported.status_code, 415)
