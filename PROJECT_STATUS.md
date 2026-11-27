@@ -32,6 +32,15 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 8 validation status
+
+Milestone 8 is a PARTIAL PASS. Available SQLite migration, backend, security,
+API, cross-hospital, encryption, scanner-interface, FHIR-outbox, and audit
+checks execute successfully. A PostgreSQL-only audit test and all live
+PostgreSQL/HAPI/Fabric/ClamAV/browser checks are blocked by unavailable tools.
+Cross-hospital consent-gated download and revocation behavior is implemented
+and tested at the API boundary.
+
 ## Milestone 7 cross-hospital exchange status
 
 Milestone 7 adds a dedicated cross-hospital exchange request lifecycle and

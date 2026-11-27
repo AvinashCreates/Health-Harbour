@@ -22,6 +22,21 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 8 validation fixes
+
+- Added a dedicated FHIR outbox worker loop to the application lifespan.
+- Added consent-gated cross-hospital source-document download, with source
+  organization, grantee, requesting organization, expiry, revocation, scope,
+  and processing checks.
+- Removed synchronous HAPI persistence from consent approval/revoke paths;
+  FHIR synchronization is now queued and processed by the outbox worker.
+- Updated FHIR permanent-failure classification to recognize HTTP upstream
+  400/401/403/404/409/422 statuses.
+- Focused cross-hospital/FHIR tests pass, including wrong-provider download
+  denial and revocation blocking.
+- Live infrastructure validation remains blocked by missing Docker, PostgreSQL,
+  Node/npm, browser, HAPI, Fabric, and ClamAV tooling.
+
 ## Milestone 7 cross-hospital exchange
 
 - Added `CrossHospitalExchangeRequest` and

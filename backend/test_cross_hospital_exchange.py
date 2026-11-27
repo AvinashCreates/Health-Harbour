@@ -160,6 +160,10 @@ class CrossHospitalExchangeTests(unittest.TestCase):
             ))
             db.commit()
 
+        storage_file = Path(os.environ["FILE_STORAGE_PATH"])
+        storage_file.mkdir(parents=True, exist_ok=True)
+        (storage_file / "hospital-a-record.blob").write_bytes(b"Synthetic source record")
+
         documents = self.client.get(
             f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents",
             headers=self.headers["provider_b"],
@@ -167,6 +171,18 @@ class CrossHospitalExchangeTests(unittest.TestCase):
         self.assertEqual(documents.status_code, 200, documents.text)
         self.assertEqual(len(documents.json()), 1)
         document_id = documents.json()[0]["id"]
+
+        downloaded = self.client.get(
+            f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents/{document_id}/download",
+            headers=self.headers["provider_b"],
+        )
+        self.assertEqual(downloaded.status_code, 200)
+
+        wrong_provider_download = self.client.get(
+            f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents/{document_id}/download",
+            headers=self.headers["provider_a"],
+        )
+        self.assertIn(wrong_provider_download.status_code, {403, 404})
 
         imported = self.client.post(
             f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents/{document_id}/import",
@@ -190,6 +206,12 @@ class CrossHospitalExchangeTests(unittest.TestCase):
         )
         self.assertEqual(revoked.status_code, 200, revoked.text)
         self.assertEqual(revoked.json()["status"], "REVOKED")
+
+        blocked_download = self.client.get(
+            f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents/{document_id}/download",
+            headers=self.headers["provider_b"],
+        )
+        self.assertEqual(blocked_download.status_code, 403)
 
         blocked = self.client.get(
             f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents",

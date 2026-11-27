@@ -15,6 +15,7 @@ from database import Base, DATABASE_URL, engine, get_db
 from routers import audit, auth, care, consent, exchange, files, fhir, fhir_sync, registry
 from services.fhir_server import FHIRIntegrationError, check_r4_server
 from services.ledger import ledger_enabled, process_pending_events
+from services.fhir_sync import process_fhir_sync
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,19 @@ if auto_create == "1" or (auto_create is None and DATABASE_URL.startswith("sqlit
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     worker = None
+    fhir_worker = None
     stop_worker = asyncio.Event()
+
+    async def deliver_fhir_events():
+        while not stop_worker.is_set():
+            try:
+                await asyncio.to_thread(process_fhir_sync, None, 20)
+            except Exception:
+                logger.exception("FHIR synchronization worker cycle failed")
+            try:
+                await asyncio.wait_for(stop_worker.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                pass
 
     async def deliver_ledger_events():
         while not stop_worker.is_set():
@@ -39,12 +52,15 @@ async def lifespan(app: FastAPI):
             except asyncio.TimeoutError:
                 pass
 
+    fhir_worker = asyncio.create_task(deliver_fhir_events())
     if ledger_enabled():
         worker = asyncio.create_task(deliver_ledger_events())
     try:
         yield
     finally:
         stop_worker.set()
+        if fhir_worker:
+            await fhir_worker
         if worker:
             await worker
 

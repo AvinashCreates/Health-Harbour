@@ -102,7 +102,12 @@ def process_fhir_sync(db: Session | None = None, batch_size: int = 20) -> dict:
                 synced += 1
             except FHIRIntegrationError as exc:
                 permanent_statuses = {400, 401, 403, 404, 409, 422}
-                category = "permanent" if exc.status_code in permanent_statuses or exc.status_code == 401 else "retryable"
+                upstream_status = getattr(exc, "upstream_status_code", None)
+                category = (
+                    "permanent"
+                    if upstream_status in permanent_statuses or exc.status_code in permanent_statuses
+                    else "retryable"
+                )
                 event.last_error_category = category
                 event.last_error = str(exc)[:500]
                 if category == "permanent" or event.attempt_count >= MAX_ATTEMPTS:

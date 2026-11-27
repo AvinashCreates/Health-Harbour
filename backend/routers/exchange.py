@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 import models
@@ -8,8 +9,8 @@ import schemas
 from database import get_db
 from deps import require_roles
 from services import audit_logger, fhir_builder
-from services.fhir_server import persist_resource
 from services.fhir_sync import queue_fhir_resource
+from services.document_storage import EncryptionConfigurationError, get_document_storage
 from services.registry import require_verified_provider
 
 router = APIRouter(prefix="/api/v1", tags=["cross-hospital exchange"])
@@ -166,7 +167,6 @@ def decide_exchange_request(
                 purpose="TREATMENT",
             )
             fhir_consent["status"] = "inactive"
-            persist_resource(fhir_consent)
             queue_fhir_resource(db, "Consent", consent.id, fhir_consent)
         exchange.status = "REVOKED"
         exchange.response_reason = payload.reason
@@ -218,7 +218,6 @@ def decide_exchange_request(
             organization_ref=requesting.id,
             purpose="TREATMENT",
         )
-        persist_resource(fhir_consent)
         queue_fhir_resource(db, "Consent", consent.id, fhir_consent)
         exchange.consent_id = consent.id
         exchange.status = "APPROVED"
@@ -255,11 +254,19 @@ def exchange_documents(
     _require_requesting_provider(db, current_user, exchange)
     if exchange.status != "APPROVED" or exchange.consent_id is None:
         raise HTTPException(status_code=403, detail="Approved exchange consent is required")
+    source_org = db.query(models.HealthcareOrganization).filter(
+        models.HealthcareOrganization.id == exchange.source_organization_id,
+        models.HealthcareOrganization.status == "APPROVED",
+    ).first()
+    if source_org is None:
+        raise HTTPException(status_code=403, detail="Source organization is not approved")
     consent = db.query(models.Consent).filter(
         models.Consent.id == exchange.consent_id,
         models.Consent.patient_id == exchange.patient_id,
+        models.Consent.grantee_id == current_user.id,
+        models.Consent.organization_id == exchange.requesting_organization_id,
         models.Consent.revoked_at.is_(None),
-    ).first()
+    ).with_for_update().first()
     if consent is None or consent.expires_at <= datetime.utcnow() or "Document" not in (consent.resource_types or []):
         raise HTTPException(status_code=403, detail="Document consent is expired or out of scope")
 
@@ -282,6 +289,105 @@ def exchange_documents(
     } for file in files]
 
 
+@router.get("/cross-hospital/exchange-requests/{exchange_id}/documents/{document_id}/download")
+def download_cross_hospital_document(
+    exchange_id: str,
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_roles("doctor")),
+):
+    exchange = db.query(models.CrossHospitalExchangeRequest).filter(
+        models.CrossHospitalExchangeRequest.id == exchange_id,
+    ).first()
+    if exchange is None:
+        raise HTTPException(status_code=404, detail="Exchange request not found")
+    provider = _require_requesting_provider(db, current_user, exchange)
+    if exchange.status != "APPROVED" or exchange.consent_id is None:
+        audit_logger.log_event(db, current_user.id, "CROSS_HOSPITAL_DOCUMENT_ACCESS_DENIED", {
+            "exchange_request_id": exchange.id,
+            "document_id": document_id,
+            "patient_id": exchange.patient_id,
+            "requesting_organization_id": exchange.requesting_organization_id,
+            "source_organization_id": exchange.source_organization_id,
+            "outcome": "denied",
+        })
+        raise HTTPException(status_code=403, detail="Approved exchange consent is required")
+    source_org = db.query(models.HealthcareOrganization).filter(
+        models.HealthcareOrganization.id == exchange.source_organization_id,
+        models.HealthcareOrganization.status == "APPROVED",
+    ).first()
+    if source_org is None:
+        raise HTTPException(status_code=403, detail="Source organization is not approved")
+    consent = db.query(models.Consent).filter(
+        models.Consent.id == exchange.consent_id,
+        models.Consent.patient_id == exchange.patient_id,
+        models.Consent.grantee_id == current_user.id,
+        models.Consent.organization_id == exchange.requesting_organization_id,
+        models.Consent.revoked_at.is_(None),
+        models.Consent.purpose == "TREATMENT",
+    ).with_for_update().first()
+    if consent is None or consent.expires_at <= datetime.utcnow() or "Document" not in (consent.resource_types or []):
+        audit_logger.log_event(db, current_user.id, "CROSS_HOSPITAL_DOCUMENT_ACCESS_DENIED", {
+            "exchange_request_id": exchange.id,
+            "document_id": document_id,
+            "patient_id": exchange.patient_id,
+            "requesting_organization_id": exchange.requesting_organization_id,
+            "source_organization_id": exchange.source_organization_id,
+            "outcome": "denied",
+        })
+        raise HTTPException(status_code=403, detail="Document consent is expired, revoked, or out of scope")
+
+    source_file = db.query(models.ClinicalFile).filter(
+        models.ClinicalFile.id == document_id,
+        models.ClinicalFile.patient_id == exchange.patient_id,
+        models.ClinicalFile.deleted_at.is_(None),
+        models.ClinicalFile.processing_status == "CLEAN",
+        models.ClinicalFile.source_organization_id == exchange.source_organization_id,
+    ).first()
+    if source_file is None:
+        raise HTTPException(status_code=404, detail="Source document not found")
+
+    storage = get_document_storage()
+    try:
+        content = storage.read_authorized(
+            source_file.storage_key,
+            getattr(source_file, "encryption_version", None),
+            getattr(source_file, "encryption_key_id", None),
+        )
+    except EncryptionConfigurationError as exc:
+        audit_logger.log_event(db, current_user.id, "CROSS_HOSPITAL_DOCUMENT_ACCESS_DENIED", {
+            "exchange_request_id": exchange.id,
+            "document_id": document_id,
+            "patient_id": exchange.patient_id,
+            "outcome": "denied",
+            "reason": "encrypted_document_unavailable",
+        })
+        raise HTTPException(status_code=503, detail="The stored document could not be decrypted") from exc
+
+    audit_logger.log_event(db, current_user.id, "CROSS_HOSPITAL_DOCUMENT_RETRIEVED", {
+        "exchange_request_id": exchange.id,
+        "document_id": source_file.id,
+        "patient_id": exchange.patient_id,
+        "requesting_organization_id": exchange.requesting_organization_id,
+        "source_organization_id": exchange.source_organization_id,
+        "requesting_provider_id": provider.id,
+        "consent_id": consent.id,
+        "resource_type": "DocumentReference",
+        "outcome": "granted",
+    })
+    safe_filename = source_file.filename.replace("\\", "_").replace('"', "_").replace("%", "_")
+    return Response(
+        content=content,
+        media_type=source_file.media_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Length": str(len(content)),
+            "Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}",
+        },
+    )
+
+
 @router.post("/cross-hospital/exchange-requests/{exchange_id}/documents/{document_id}/import", response_model=schemas.CrossOrganizationDocumentImportOut)
 def import_exchange_document(
     exchange_id: str,
@@ -297,11 +403,19 @@ def import_exchange_document(
     provider = _require_requesting_provider(db, current_user, exchange)
     if exchange.status != "APPROVED" or exchange.consent_id is None:
         raise HTTPException(status_code=403, detail="Approved exchange consent is required")
+    source_org = db.query(models.HealthcareOrganization).filter(
+        models.HealthcareOrganization.id == exchange.source_organization_id,
+        models.HealthcareOrganization.status == "APPROVED",
+    ).first()
+    if source_org is None:
+        raise HTTPException(status_code=403, detail="Source organization is not approved")
     consent = db.query(models.Consent).filter(
         models.Consent.id == exchange.consent_id,
         models.Consent.patient_id == exchange.patient_id,
+        models.Consent.grantee_id == current_user.id,
+        models.Consent.organization_id == exchange.requesting_organization_id,
         models.Consent.revoked_at.is_(None),
-    ).first()
+    ).with_for_update().first()
     if consent is None or consent.expires_at <= datetime.utcnow() or "Document" not in (consent.resource_types or []):
         raise HTTPException(status_code=403, detail="Document consent is expired or out of scope")
 

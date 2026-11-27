@@ -14,6 +14,21 @@
   acceptance remain NOT VERIFIED.
 
 
+## Latest Milestone 8 validation (2026-11-27)
+
+- Complete migration chain passed on isolated SQLite through
+  `d4e8b2a1c9f7_cross_hospital_exchange`; `alembic check` reported no drift.
+- Focused cross-hospital and FHIR tests passed: 7 tests. Coverage includes
+  consent-gated source-document download, import provenance, revocation denial,
+  wrong-provider denial, and FHIR permanent-failure handling.
+- Complete targeted backend suite passed: **73 tests, 1 PostgreSQL-only audit
+  concurrency test skipped**.
+- `test_api.py` and `test_security.py` passed separately on fresh SQLite.
+- Python compilation and `git diff --check` passed.
+- PostgreSQL, Docker/Compose, Node/npm, ClamAV, HAPI, Fabric, and browser
+  automation were unavailable. Live database migration, frontend build, HAPI
+  operations, Fabric confirmation, and browser acceptance remain NOT RUN.
+
 ## Latest Milestone 6 verification (2026-11-27)
 
 - Focused FHIR sync tests: **5 passed**. Coverage includes stable queue keys,

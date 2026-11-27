@@ -114,6 +114,21 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 8 validation findings (2026-11-27)
+
+- Confirmed and fixed: cross-hospital document APIs now explicitly verify
+  consent grantee and organization, approved source organization, and consent
+  expiry/revocation/scope before metadata, download, or import.
+- Confirmed and fixed: cross-hospital document download is authenticated and
+  available only to the requesting provider. Direct HAPI/Binary access is not
+  implemented as an authorization bypass.
+- Confirmed and fixed: FHIR synchronization runs through an application worker
+  and consent approval/revocation no longer performs a synchronous HAPI write.
+  Permanent 400/401/403/404/409/422 failures are retained as permanent states.
+- Remaining: live revocation race behavior, PostgreSQL row locking, HAPI
+  remote confirmation, ClamAV service testing, and Fabric transaction
+  confirmation could not be demonstrated with unavailable infrastructure.
+
 ## Milestone 7 cross-hospital controls (2026-11-27)
 
 - Cross-hospital requests require a currently verified provider with an active
