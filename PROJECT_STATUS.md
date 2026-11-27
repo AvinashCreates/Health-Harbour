@@ -32,6 +32,20 @@ production interoperability.
   and backup/restore remain unverified. See [TESTING_REPORT.md](./TESTING_REPORT.md)
   and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for reproduction details.
 
+## Milestone 7.2 validation status
+
+Milestone 7.2 is locally validated as a PARTIAL PASS. The complete relevant
+backend suite passed 77 tests with one PostgreSQL-only test skipped. Focused
+cross-hospital revocation, FHIR duplicate processing, permanent-failure, and
+crash-recovery tests pass with mock/local behavior.
+
+The application now rechecks cross-hospital consent immediately before document
+retrieval/import, FHIR outbox events are claimed under transaction/row locking
+where supported, permanent failures are not reset merely by unchanged retries,
+and changed payloads create a new pending synchronization attempt. Live
+PostgreSQL, HAPI, Fabric, frontend build, and browser acceptance remain blocked
+by unavailable tooling/infrastructure.
+
 ## Milestone 8 validation status
 
 Milestone 8 is a PARTIAL PASS. Available SQLite migration, backend, security,

@@ -114,6 +114,20 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 7.2 validation findings (2026-11-27)
+
+- Cross-hospital consent is rechecked immediately before document metadata,
+  retrieval, and import decisions. Revocation between initial request handling
+  and the final recheck is denied by the final database query.
+- FHIR outbox event processing now uses stable resource type/ID uniqueness,
+  row claiming, bounded attempt counts, and permanent-failure rules. Unchanged
+  permanent failures are not silently requeued.
+- A controlled crash after a mocked remote operation leaves the event FAILED;
+  a restart/retry processes it successfully against the stable resource identity.
+- SQLite tests demonstrate local transaction/recovery behavior only. Real
+  PostgreSQL row-lock timing, HAPI idempotency, and worker multiprocess races
+  remain unverified.
+
 ## Milestone 8 validation findings (2026-11-27)
 
 - Confirmed and fixed: cross-hospital document APIs now explicitly verify

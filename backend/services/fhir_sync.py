@@ -2,6 +2,7 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import models
@@ -37,8 +38,30 @@ def queue_fhir_resource(db: Session, resource_type: str, resource_id: str, paylo
             next_attempt_at=datetime.utcnow(),
         )
         db.add(event)
-        db.flush()
-        return event
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            event = db.query(models.FHIRSyncOutbox).filter(
+                models.FHIRSyncOutbox.resource_type == resource_type,
+                models.FHIRSyncOutbox.resource_id == resource_id,
+            ).with_for_update().first()
+            if event is None:
+                raise
+        if event is not None:
+            if event.payload_hash != payload_hash:
+                event.resource_payload = payload
+                event.payload_hash = payload_hash
+                event.status = "PENDING"
+                event.attempt_count = 0
+                event.next_attempt_at = datetime.utcnow()
+                event.last_error = None
+                event.last_error_category = None
+            elif event.status == "FAILED":
+                event.status = "PENDING"
+                event.next_attempt_at = datetime.utcnow()
+            db.flush()
+            return event
     if event.payload_hash != payload_hash:
         event.resource_payload = payload
         event.payload_hash = payload_hash
@@ -47,7 +70,7 @@ def queue_fhir_resource(db: Session, resource_type: str, resource_id: str, paylo
         event.next_attempt_at = datetime.utcnow()
         event.last_error = None
         event.last_error_category = None
-    elif event.status in {"FAILED", "PERMANENT_FAILED"}:
+    elif event.status == "FAILED":
         event.status = "PENDING"
         event.next_attempt_at = datetime.utcnow()
     db.flush()
@@ -81,8 +104,9 @@ def process_fhir_sync(db: Session | None = None, batch_size: int = 20) -> dict:
         now = datetime.utcnow()
         events = db.query(models.FHIRSyncOutbox).filter(
             models.FHIRSyncOutbox.status.in_({"PENDING", "FAILED"}),
+            models.FHIRSyncOutbox.attempt_count < MAX_ATTEMPTS,
             models.FHIRSyncOutbox.next_attempt_at <= now,
-        ).order_by(models.FHIRSyncOutbox.created_at.asc()).limit(batch_size).all()
+        ).order_by(models.FHIRSyncOutbox.created_at.asc()).limit(batch_size).with_for_update().all()
         synced = 0
         failed = 0
         permanent = 0
@@ -111,8 +135,8 @@ def process_fhir_sync(db: Session | None = None, batch_size: int = 20) -> dict:
                 event.last_error_category = category
                 event.last_error = str(exc)[:500]
                 if category == "permanent" or event.attempt_count >= MAX_ATTEMPTS:
-                    event.status = "PERMANENT_FAILED" if category == "permanent" else "FAILED"
-                    permanent += 1 if event.status == "PERMANENT_FAILED" else 0
+                    event.status = "PERMANENT_FAILED"
+                    permanent += 1
                 else:
                     event.status = "FAILED"
                     event.next_attempt_at = datetime.utcnow() + timedelta(seconds=min(2 ** event.attempt_count, 300))

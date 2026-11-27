@@ -337,6 +337,22 @@ def download_cross_hospital_document(
         })
         raise HTTPException(status_code=403, detail="Document consent is expired, revoked, or out of scope")
 
+    consent = db.query(models.Consent).filter(
+        models.Consent.id == exchange.consent_id,
+        models.Consent.patient_id == exchange.patient_id,
+        models.Consent.grantee_id == current_user.id,
+        models.Consent.organization_id == exchange.requesting_organization_id,
+        models.Consent.revoked_at.is_(None),
+    ).with_for_update().first()
+    if consent is None or consent.expires_at <= datetime.utcnow() or "Document" not in (consent.resource_types or []):
+        audit_logger.log_event(db, current_user.id, "CROSS_HOSPITAL_DOCUMENT_ACCESS_DENIED", {
+            "exchange_request_id": exchange.id,
+            "document_id": document_id,
+            "outcome": "denied",
+            "reason": "authorization_rechecked",
+        })
+        raise HTTPException(status_code=403, detail="Document consent is expired, revoked, or out of scope")
+
     source_file = db.query(models.ClinicalFile).filter(
         models.ClinicalFile.id == document_id,
         models.ClinicalFile.patient_id == exchange.patient_id,
@@ -409,6 +425,16 @@ def import_exchange_document(
     ).first()
     if source_org is None:
         raise HTTPException(status_code=403, detail="Source organization is not approved")
+    consent = db.query(models.Consent).filter(
+        models.Consent.id == exchange.consent_id,
+        models.Consent.patient_id == exchange.patient_id,
+        models.Consent.grantee_id == current_user.id,
+        models.Consent.organization_id == exchange.requesting_organization_id,
+        models.Consent.revoked_at.is_(None),
+    ).with_for_update().first()
+    if consent is None or consent.expires_at <= datetime.utcnow() or "Document" not in (consent.resource_types or []):
+        raise HTTPException(status_code=403, detail="Document consent is expired or out of scope")
+
     consent = db.query(models.Consent).filter(
         models.Consent.id == exchange.consent_id,
         models.Consent.patient_id == exchange.patient_id,

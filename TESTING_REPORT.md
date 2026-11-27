@@ -1,5 +1,19 @@
 # Testing report
 
+## Milestone 7.2 local concurrency and recovery validation (2026-11-27)
+
+- Focused cross-hospital and FHIR recovery tests passed: **7 tests**.
+- Complete relevant backend suite passed: **77 tests**, with one PostgreSQL-only
+  audit concurrency test skipped.
+- `test_api.py` and `test_security.py` passed on fresh isolated SQLite databases.
+- Complete SQLite Alembic upgrade and `alembic check` passed with no schema drift.
+- Python compilation and `git diff --check` passed.
+- Fixed worker duplicate-processing protection and permanent-failed requeue behavior.
+- Added final cross-hospital consent recheck before document retrieval/import.
+- PostgreSQL, Docker, Node/npm, HAPI, Fabric, ClamAV, browser automation, and
+  live infrastructure remained unavailable and are NOT VERIFIED.
+
+
 ## Latest Milestone 7 verification (2026-11-27)
 
 - Two cross-hospital exchange tests passed. Coverage includes patient approval,

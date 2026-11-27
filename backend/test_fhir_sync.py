@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import datetime
 from unittest.mock import patch
 
 from sqlalchemy import create_engine
@@ -87,6 +88,71 @@ class FHIRSyncTests(unittest.TestCase):
         self.assertEqual(org["id"], "organization-1")
         self.assertEqual(role["practitioner"]["reference"], "Practitioner/provider-1")
         self.assertEqual(role["organization"]["reference"], "Organization/organization-1")
+
+    def test_duplicate_worker_execution_does_not_resync_same_event(self):
+        with self.session_factory() as db:
+            queue_fhir_resource(db, "Patient", "patient-duplicate", {
+                "resourceType": "Patient", "id": "patient-duplicate", "active": True,
+            })
+            db.commit()
+            first = process_fhir_sync(db, 20)
+            second = process_fhir_sync(db, 20)
+            self.assertEqual(first["synced"], 1)
+            self.assertEqual(second["processed"], 0)
+            self.assertEqual(db.query(models.FHIRResource).filter_by(resource_type="Patient", fhir_id="patient-duplicate").count(), 1)
+
+    def test_worker_crash_after_remote_operation_can_retry_without_duplicate_logic(self):
+        with self.session_factory() as db:
+            queue_fhir_resource(db, "Patient", "patient-crash-recovery", {
+                "resourceType": "Patient", "id": "patient-crash-recovery", "active": True,
+            })
+            db.commit()
+            with patch.dict(os.environ, {"FHIR_MODE": "hapi", "FHIR_SERVER_URL": "http://127.0.0.1:1/fhir"}):
+                with patch("services.fhir_sync.persist_resource", return_value={
+                    "resourceType": "Patient", "id": "patient-crash-recovery", "active": True,
+                }), patch("services.fhir_sync._store_local_mirror", side_effect=RuntimeError("worker interrupted")):
+                    crashed = process_fhir_sync(db, 20)
+                event = db.query(models.FHIRSyncOutbox).one()
+                self.assertEqual(crashed["failed"], 1)
+                self.assertEqual(event.status, "FAILED")
+                event.next_attempt_at = datetime.utcnow()
+                db.commit()
+
+                with patch("services.fhir_sync.persist_resource", return_value={
+                    "resourceType": "Patient", "id": "patient-crash-recovery", "active": True,
+                }):
+                    recovered = process_fhir_sync(db, 20)
+                event = db.query(models.FHIRSyncOutbox).one()
+                self.assertEqual(recovered["synced"], 1)
+                self.assertEqual(event.status, "SYNCED")
+
+    def test_failed_event_retries_and_permanent_event_not_requeued(self):
+        with self.session_factory() as db:
+            queue_fhir_resource(db, "Patient", "patient-retry", {
+                "resourceType": "Patient", "id": "patient-retry", "active": True,
+            })
+            db.commit()
+            event = db.query(models.FHIRSyncOutbox).one()
+            event.status = "FAILED"
+            event.attempt_count = 1
+            event.next_attempt_at = datetime.utcnow()
+            db.commit()
+
+            queue_fhir_resource(db, "Patient", "patient-retry", {
+                "resourceType": "Patient", "id": "patient-retry", "active": True,
+            })
+            db.commit()
+            event = db.query(models.FHIRSyncOutbox).one()
+            self.assertEqual(event.status, "PENDING")
+
+            event.status = "PERMANENT_FAILED"
+            db.commit()
+            queue_fhir_resource(db, "Patient", "patient-retry", {
+                "resourceType": "Patient", "id": "patient-retry", "active": True,
+            })
+            db.commit()
+            event = db.query(models.FHIRSyncOutbox).one()
+            self.assertEqual(event.status, "PERMANENT_FAILED")
 
     def test_hapi_permanent_error_is_marked_permanent_failed(self):
         with self.session_factory() as db:

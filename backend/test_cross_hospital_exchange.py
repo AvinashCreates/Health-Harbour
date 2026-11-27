@@ -207,6 +207,17 @@ class CrossHospitalExchangeTests(unittest.TestCase):
         self.assertEqual(revoked.status_code, 200, revoked.text)
         self.assertEqual(revoked.json()["status"], "REVOKED")
 
+        with self.session_factory() as db:
+            retrieved = db.query(models.AuditLog).filter_by(
+                event_type="CROSS_HOSPITAL_DOCUMENT_RETRIEVED",
+            ).first()
+            revoked_event = db.query(models.AuditLog).filter_by(
+                event_type="CROSS_HOSPITAL_CONSENT_REVOKED",
+            ).first()
+            self.assertIsNotNone(retrieved)
+            self.assertIsNotNone(revoked_event)
+            self.assertNotIn("b" * 64, str(revoked_event.event_payload))
+
         blocked_download = self.client.get(
             f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents/{document_id}/download",
             headers=self.headers["provider_b"],
@@ -218,6 +229,61 @@ class CrossHospitalExchangeTests(unittest.TestCase):
             headers=self.headers["provider_b"],
         )
         self.assertEqual(blocked.status_code, 403)
+
+    def test_consent_revoked_before_authorization_recheck_blocks_download(self):
+        created = self.client.post("/api/v1/cross-hospital/exchange-requests", headers=self.headers["provider_b"], json={
+            "patient_id": self.patient.id,
+            "requesting_organization_id": self.org_b.id,
+            "source_organization_id": self.org_a.id,
+            "resource_types": ["Document"],
+            "requested_duration_days": 7,
+            "reason": "Synthetic concurrent revocation test.",
+        })
+        self.assertEqual(created.status_code, 201, created.text)
+        exchange = created.json()
+        approved = self.client.post(
+            f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/patient-decision",
+            headers=self.headers["patient"],
+            json={"decision": "APPROVED", "reason": "Temporary approval for revocation test."},
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+
+        with self.session_factory() as db:
+            file_record = models.ClinicalFile(
+                patient_id=self.patient.id,
+                uploaded_by_id=self.patient.id,
+                filename="revocation-record.txt",
+                storage_key="revocation-record.blob",
+                media_type="text/plain",
+                category="clinical-record",
+                size_bytes=21,
+                sha256="b" * 64,
+                processing_status="CLEAN",
+                scan_status="NOT_REQUIRED",
+                source_organization_id=self.org_a.id,
+                custodian_organization_id=self.org_a.id,
+            )
+            db.add(file_record)
+            db.commit()
+            db.refresh(file_record)
+            document_id = file_record.id
+
+        storage_file = Path(os.environ["FILE_STORAGE_PATH"])
+        storage_file.mkdir(parents=True, exist_ok=True)
+        (storage_file / "revocation-record.blob").write_bytes(b"Synthetic revoked data")
+
+        revoked = self.client.post(
+            f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/patient-decision",
+            headers=self.headers["patient"],
+            json={"decision": "REVOKED", "reason": "Revoke before retrieval authorization."},
+        )
+        self.assertEqual(revoked.status_code, 200, revoked.text)
+
+        denied = self.client.get(
+            f"/api/v1/cross-hospital/exchange-requests/{exchange['id']}/documents/{document_id}/download",
+            headers=self.headers["provider_b"],
+        )
+        self.assertEqual(denied.status_code, 403)
 
     def test_provider_cannot_create_exchange_for_unauthenticated_org_and_patient_cross_tenant_is_denied(self):
         denied_org = self.client.post("/api/v1/cross-hospital/exchange-requests", headers=self.headers["provider_a"], json={

@@ -22,6 +22,21 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 7.2 concurrency and recovery fixes
+
+- Cross-hospital document list/download/import now rechecks consent owner,
+  requesting organization, revocation, expiry, purpose, and Document scope
+  immediately before the operation.
+- FHIR outbox processing selects pending/failed events with row claiming and
+  bounded attempt limits. Unchanged permanent failures remain permanent until
+  the payload changes.
+- A worker crash after remote operation but before mirror status marking leaves
+  the event recoverable and is retried without changing resource identity.
+- Duplicate worker executions process a stable resource at most once according
+  to local mirror/outbox state; live HAPI duplicate prevention remains unverified.
+- Added deterministic tests for revocation-before-recheck, worker crash recovery,
+  duplicate processing, failed/permanent retry state, and reconciliation.
+
 ## Milestone 8 validation fixes
 
 - Added a dedicated FHIR outbox worker loop to the application lifespan.
