@@ -133,6 +133,21 @@ verification or production credential assurance. The registry migration is
 additive, but verify it against a disposable PostgreSQL database before
 applying it to any deployment.
 
+## Patient-provider care initiation
+
+Patients can initiate a care connection with a verified provider affiliated
+with an approved organization from the Care network directory. Providers can
+accept or decline connections and can send record-access requests for specific
+FHIR resource categories and an explicit 1–30 day duration. Patients review the
+provider, organization, purpose, scopes, duration, and reason in Sharing &
+access before approval or rejection.
+
+Approving a provider request creates the existing resource-scoped, expiring,
+revocable `Consent` record. It does not bypass consent checks or grant access
+before approval. Rejection or provider cancellation creates no consent.
+Suspended providers, suspended organizations, and ended affiliations cannot
+initiate or approve these workflows.
+
 ## Consent-aware clinical files
 
 The Files workspace supports private PDF, JPEG, PNG, TXT, and CSV uploads up

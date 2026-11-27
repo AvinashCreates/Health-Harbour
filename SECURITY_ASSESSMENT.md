@@ -114,6 +114,22 @@ Keycloak discovery timed out, and no ZAP scan or live production configuration
 review was performed. These results do not change the live-deployment risks
 above or establish production readiness.
 
+## Milestone 3 care workflow controls (2026-11-27)
+
+- Care connections and record requests are owned by patient/provider and
+  organization-affiliated IDs. Every response, decision, and cancellation
+  rechecks ownership and current provider/organization/affiliation state.
+- Providers cannot use a stale JWT role or affiliation to initiate workflows:
+  `require_verified_provider` and active-affiliation checks run against the
+  database for every request.
+- Patient approval creates the existing `Consent` model rather than a second
+  authorization mechanism. It is resource-scoped, treatment-purpose, bounded
+  to 1–30 days, and subject to existing expiry/revoke checks.
+- Rejection and provider cancellation create no consent. Suspended providers
+  and suspended organizations are denied at initiation and approval.
+- Focused tests cover patient/provider/organization ownership, cross-provider
+  and cross-patient denial, duplicate transitions, and approval/rejection.
+
 ## Milestone 2 registry controls (2026-11-26)
 
 - Added database-backed organization approval, provider verification,

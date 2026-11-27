@@ -10,20 +10,14 @@ from deps import require_roles
 from services import audit_logger
 from services import fhir_builder
 from services.fhir_server import authoritative_resource, fhir_mode, persist_resource
+from services.consent_access import consent_is_active
+from services.registry import provider_has_active_affiliation
 
 router = APIRouter(prefix="/consent", tags=["consent"])
 
 
 def _serialize(c: models.Consent, db: Session) -> schemas.ConsentOut:
-    now = datetime.utcnow()
-    is_active = c.revoked_at is None and c.expires_at > now
-    if is_active and c.organization_id:
-        is_active = db.query(models.OrganizationMembership.id).filter(
-            models.OrganizationMembership.organization_id == c.organization_id,
-            models.OrganizationMembership.practitioner_id == c.grantee_id,
-            models.OrganizationMembership.active.is_(True),
-            models.OrganizationMembership.created_at <= c.granted_at,
-        ).first() is not None
+    is_active = consent_is_active(db, c)
     return schemas.ConsentOut(
         id=c.id, patient_id=c.patient_id, grantee_id=c.grantee_id,
         organization_id=c.organization_id, purpose=c.purpose,
@@ -41,22 +35,39 @@ def grant_consent(payload: schemas.ConsentGrant, db: Session = Depends(get_db), 
 
     organization = None
     if payload.organization_id:
-        organization = db.query(models.User).filter(
+        legacy_organization = db.query(models.User).filter(
             models.User.id == payload.organization_id,
             models.User.role == "lab",
         ).first()
-        if organization is None:
-            raise HTTPException(status_code=404, detail="Healthcare organization not found")
-        membership = db.query(models.OrganizationMembership).filter(
-            models.OrganizationMembership.organization_id == organization.id,
-            models.OrganizationMembership.practitioner_id == doctor.id,
-            models.OrganizationMembership.active.is_(True),
+        registry_organization = db.query(models.HealthcareOrganization).filter(
+            models.HealthcareOrganization.id == payload.organization_id,
+            models.HealthcareOrganization.status == "APPROVED",
         ).first()
-        if membership is None:
-            raise HTTPException(
-                status_code=403,
-                detail="The named physician is not an active member of this organization",
-            )
+        if legacy_organization:
+            membership = db.query(models.OrganizationMembership).filter(
+                models.OrganizationMembership.organization_id == legacy_organization.id,
+                models.OrganizationMembership.practitioner_id == doctor.id,
+                models.OrganizationMembership.active.is_(True),
+            ).first()
+            if membership is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="The named physician is not an active member of this organization",
+                )
+            organization = legacy_organization
+        elif registry_organization:
+            provider = db.query(models.HealthcareProvider).filter(
+                models.HealthcareProvider.account_id == doctor.id,
+                models.HealthcareProvider.status == "VERIFIED",
+            ).first()
+            if provider is None or not provider_has_active_affiliation(db, provider.id, registry_organization.id):
+                raise HTTPException(
+                    status_code=403,
+                    detail="The named physician is not an active verified member of this organization",
+                )
+            organization = registry_organization
+        else:
+            raise HTTPException(status_code=404, detail="Healthcare organization not found")
 
     granted_at = datetime.utcnow()
     consent = models.Consent(
@@ -133,6 +144,49 @@ def list_consent_organizations(
             "name": practitioner.full_name,
             "email": practitioner.email,
         })
+
+    registry_rows = db.query(
+        models.HealthcareOrganization,
+        models.HealthcareProvider,
+        models.User,
+    ).join(
+        models.OrganizationAffiliation,
+        models.OrganizationAffiliation.organization_id == models.HealthcareOrganization.id,
+    ).join(
+        models.HealthcareProvider,
+        models.HealthcareProvider.id == models.OrganizationAffiliation.provider_id,
+    ).join(
+        models.User,
+        models.User.id == models.HealthcareProvider.account_id,
+    ).filter(
+        models.HealthcareOrganization.status == "APPROVED",
+        models.HealthcareProvider.status == "VERIFIED",
+        models.OrganizationAffiliation.status == "ACTIVE",
+    ).all()
+    now = datetime.utcnow()
+    for organization, provider, practitioner in registry_rows:
+        affiliation = db.query(models.OrganizationAffiliation).filter(
+            models.OrganizationAffiliation.organization_id == organization.id,
+            models.OrganizationAffiliation.provider_id == provider.id,
+            models.OrganizationAffiliation.status == "ACTIVE",
+        ).first()
+        if affiliation and (
+            affiliation.effective_from is None or affiliation.effective_from <= now
+        ) and (
+            affiliation.effective_until is None or affiliation.effective_until > now
+        ):
+            entry = organizations.setdefault(organization.id, {
+                "id": organization.id,
+                "name": organization.display_name,
+                "email": organization.contact_email,
+                "practitioners": [],
+            })
+            if not any(item["id"] == practitioner.id for item in entry["practitioners"]):
+                entry["practitioners"].append({
+                    "id": practitioner.id,
+                    "name": practitioner.full_name,
+                    "email": practitioner.email,
+                })
     return list(organizations.values())
 
 

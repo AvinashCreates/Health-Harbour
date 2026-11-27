@@ -60,6 +60,8 @@ export default function RegistryWorkspace({ token, user }) {
   const [teams, setTeams] = useState({})
   const [organizationForm, setOrganizationForm] = useState(EMPTY_ORGANIZATION)
   const [providerForm, setProviderForm] = useState(EMPTY_PROVIDER)
+  const [connectionReason, setConnectionReason] = useState('I would like to establish a care connection.')
+  const [connectionSelection, setConnectionSelection] = useState({})
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -211,6 +213,19 @@ export default function RegistryWorkspace({ token, user }) {
     ), `Provider ${statusLabel(decision).toLowerCase()}.`)
   }
 
+  async function initiateConnection(provider) {
+    const organizationId = connectionSelection[provider.id]
+    if (!organizationId) {
+      setError('Choose a healthcare organization for this care connection.')
+      return
+    }
+    await perform(`connection-${provider.id}`, () => api.initiateCareConnection({
+      provider_id: provider.id,
+      organization_id: organizationId,
+      reason: connectionReason,
+    }, token), 'Care connection initiated.')
+  }
+
   async function respond(affiliation, decision) {
     await perform(`response-${affiliation.id}`, () => api.respondToAffiliation(
       affiliation.id,
@@ -302,6 +317,11 @@ export default function RegistryWorkspace({ token, user }) {
                     {provider.public_profile && <p>{provider.public_profile}</p>}
                     <div className="registry-tags">{provider.organizations.map((organization) => <span key={organization.id}>{organization.display_name}</span>)}</div>
                     {provider.public_contact_email && <a href={`mailto:${provider.public_contact_email}`}>{provider.public_contact_email}</a>}
+                    {user.role === 'patient' && <div className="registry-actions">
+                      <label>Organization<select value={connectionSelection[provider.id] || ''} onChange={(event) => setConnectionSelection((current) => ({ ...current, [provider.id]: event.target.value }))}><option value="">Choose organization</option>{provider.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.display_name}</option>)}</select></label>
+                      <label>Reason<input value={connectionReason} maxLength={1000} onChange={(event) => setConnectionReason(event.target.value)} /></label>
+                      <button type="button" className="btn-primary" disabled={busy === `connection-${provider.id}`} onClick={() => initiateConnection(provider)}>Initiate care connection</button>
+                    </div>}
                   </article>
                 ))}
               </div> : <Empty>No currently affiliated verified providers are listed.</Empty>}

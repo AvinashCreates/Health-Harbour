@@ -22,6 +22,23 @@ deployment claims. Use synthetic data only.
   were not modified. See [TESTING_REPORT.md](./TESTING_REPORT.md) for exact
   commands and evidence.
 
+## Milestone 3 patient-provider care implementation
+
+- Added `CareConnection` and `ProviderRecordRequest` models plus additive
+  Alembic revision `f4c1a6d2e9b7`.
+- Added patient care-connection initiation, provider accept/decline/close,
+  provider record-request creation/cancellation, and patient approve/reject
+  APIs under `/api/v1`.
+- Patient approval creates the existing resource-scoped `Consent` record,
+  including organization affiliation and expiry. Rejection creates no consent.
+- All new transitions recheck current provider verification, organization
+  approval, and active affiliation state. Patient/provider ownership and cross-
+  tenant request access are checked on the backend.
+- The Registry, Sharing & access, and Doctor workflow frontends now include
+  care-discovery/connection and record-request controls using live APIs.
+- Focused care-request tests passed. The updated frontend and PostgreSQL
+  migration remain blocked by unavailable Node/npm and PostgreSQL tooling.
+
 ## Milestone 2 registry implementation
 
 - Added organization/provider application and verification records,

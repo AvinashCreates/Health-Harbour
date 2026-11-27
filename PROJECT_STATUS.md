@@ -34,11 +34,13 @@ production interoperability.
 
 ## Current master-prompt milestone
 
-Milestone 2 organization/provider registry backend and React workflows are
-implemented in the worktree. The additive registry migration and API
-regressions passed on isolated SQLite; the new frontend build, disposable
-PostgreSQL registry migration, live Keycloak/HAPI/Fabric flows, and browser
-acceptance remain unverified. Milestones beyond the registry are not started.
+Milestone 3 patient discovery and provider connection workflows are
+implemented in the worktree. It adds care-connection initiation and response,
+provider record-access requests, patient approval/rejection, and creation of
+existing resource-scoped `Consent` records. The additive SQLite migration and
+focused API regressions passed. Registry and Milestone 3 frontend builds,
+disposable PostgreSQL migrations, live Keycloak/HAPI/Fabric flows, and browser
+acceptance remain unverified.
 
 ## Application features
 

@@ -316,3 +316,66 @@ class RegistryHistoryOut(BaseModel):
     created_at: datetime
     method: str | None = None
     source: str | None = None
+
+
+class CareConnectionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider_id: str = Field(min_length=1, max_length=64)
+    organization_id: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class CareConnectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["ACCEPTED", "DECLINED", "CLOSED"]
+    response: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class CareConnectionOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    provider_id: str
+    provider_name: str
+    organization_id: str
+    organization_name: str
+    status: str
+    reason: str
+    provider_response: str | None
+    initiated_at: datetime
+    responded_at: datetime | None
+    closed_at: datetime | None
+
+
+class ProviderRecordRequestCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    patient_id: str = Field(min_length=1, max_length=64)
+    organization_id: str = Field(min_length=1, max_length=64)
+    resource_types: List[FHIRResourceType] = Field(min_length=1, max_length=8)
+    requested_duration_days: int = Field(ge=1, le=30)
+    reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class ProviderRecordRequestDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["APPROVED", "REJECTED"]
+    response_reason: str = Field(min_length=3, max_length=1000, strip_whitespace=True)
+
+
+class ProviderRecordRequestOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    provider_id: str
+    provider_name: str
+    organization_id: str
+    organization_name: str
+    resource_types: List[str]
+    purpose: str
+    requested_duration_days: int
+    reason: str
+    status: str
+    response_reason: str | None
+    consent_id: str | None
+    requested_at: datetime
+    responded_at: datetime | None

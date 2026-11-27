@@ -73,7 +73,7 @@ report FHIR mode `local`.
 
 ## Synthetic feature walkthrough
 
-1. **Registry onboarding:** As an authenticated representative, submit an
+1. **Registry and care initiation:** As an authenticated representative, submit an
    organization application in **Care network**. As an administrator, review
    and approve it. A provider submits their professional details and opaque
    evidence-reference IDs; an administrator manually reviews and verifies
@@ -82,26 +82,31 @@ report FHIR mode `local`.
    administrator activates the affiliation. This establishes prototype
    registry state only; it does not contact an official organization or
    professional registry.
-2. **Patient directory:** Browse approved organizations and providers in
-   **Care network**. The directory includes only approved organizations and
-   currently verified providers with active affiliations.
-3. **Patient consent:** Sign in as `asha.patient@example.com`, choose a
+2. **Patient directory and connection:** Browse approved organizations and
+   providers in **Care network**. Initiate a care connection with a verified
+   provider and its active organization. The provider accepts or declines in
+   the Care workflow. The connection is separate from record authorization.
+3. **Provider record request:** As a verified provider, request only selected
+   resource categories from a patient for treatment, with a 1–30 day duration.
+   As the patient, approve or reject the request in Sharing & access. Approval
+   creates the existing scoped consent record; rejection creates no consent.
+4. **Patient consent:** Sign in as `asha.patient@example.com`, choose a
    physician, select resource scopes and a 1–30 day duration, then grant
    access. Confirm the physician can access only the allowed resources.
    Revoke consent and confirm the same access is denied.
-4. **Clinical files:** As the patient, upload a supported synthetic PDF, image,
+5. **Clinical files:** As the patient, upload a supported synthetic PDF, image,
    text, or CSV file (maximum 10 MiB). Grant the physician `Document` scope,
    verify access as that physician, then revoke and verify denial. File
    visibility is enforced by the API, not only the UI.
-5. **Laboratory workflow:** As a consented physician, create a ServiceRequest
+6. **Laboratory workflow:** As a consented physician, create a ServiceRequest
    for a laboratory. As a lab reviewer, accept it and assign an affiliated
    technician. As the assigned technician, register the specimen, begin
    processing, and submit synthetic results. As the reviewer, finalize the
    report; as the requesting physician, review it.
-6. **Administrator tools:** Use the administrator account for account,
+7. **Administrator tools:** Use the administrator account for account,
    membership, and audit administration. Administrator role does not grant
    access to patient clinical resources.
-7. **Audit integrity:** The API's local hash-chain verification detects
+8. **Audit integrity:** The API's local hash-chain verification detects
    tampering. It is distinct from Fabric and does not validate or repair
    historical records in another database.
 

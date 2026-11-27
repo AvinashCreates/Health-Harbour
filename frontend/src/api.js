@@ -121,4 +121,13 @@ export const api = {
   organizationReviewHistory: (id, token) => request(`/api/v1/admin/organizations/${encodeURIComponent(id)}/history`, { token }),
   providerReviewHistory: (id, token) => request(`/api/v1/admin/providers/${encodeURIComponent(id)}/history`, { token }),
   affiliationHistory: (id, token) => request(`/api/v1/affiliations/${encodeURIComponent(id)}/history`, { token }),
+ initiateCareConnection: (payload, token) => request('/api/v1/care-connections', { method: 'POST', body: payload, token }),
+ myPatientCareConnections: (token) => request('/api/v1/care-connections/me/patient', { token }),
+ myProviderCareConnections: (token) => request('/api/v1/care-connections/me/provider', { token }),
+ respondCareConnection: (id, payload, token) => request(`/api/v1/care-connections/${encodeURIComponent(id)}/provider-response`, { method: 'POST', body: payload, token }),
+ createRecordRequest: (payload, token) => request('/api/v1/record-requests', { method: 'POST', body: payload, token }),
+ myProviderRecordRequests: (token) => request('/api/v1/record-requests/me/provider', { token }),
+ myPatientRecordRequests: (token) => request('/api/v1/record-requests/me/patient', { token }),
+ decideRecordRequest: (id, payload, token) => request(`/api/v1/record-requests/${encodeURIComponent(id)}/patient-decision`, { method: 'POST', body: payload, token }),
+ cancelRecordRequest: (id, token) => request(`/api/v1/record-requests/${encodeURIComponent(id)}/cancel`, { method: 'POST', token }),
 }

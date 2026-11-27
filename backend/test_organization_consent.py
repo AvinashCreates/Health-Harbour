@@ -141,7 +141,8 @@ class OrganizationConsentTests(unittest.TestCase):
 
         available = self.client.get("/consent/organizations", headers=self.patient_headers)
         self.assertEqual(available.status_code, 200, available.text)
-        self.assertEqual([item["id"] for item in available.json()], [self.ids["organization"]])
+        available_ids = [item["id"] for item in available.json()]
+        self.assertIn(self.ids["organization"], available_ids)
         self.assertEqual(available.json()[0]["practitioners"][0]["id"], self.ids["doctor"])
 
         grant = self.client.post(

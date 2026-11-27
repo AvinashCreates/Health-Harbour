@@ -1,5 +1,23 @@
 # Testing report
 
+## Latest Milestone 3 verification (2026-11-27)
+
+- `test_care_requests.py`: 4 Milestone 3 tests passed. Coverage includes
+  patient initiation, provider response, cross-provider/patient denial,
+  affiliation restrictions, approval-created consent, rejection without
+  consent, and suspended-provider blocking.
+- All unittest-style backend modules ran together on a fresh SQLite database:
+  **58 tests passed, 1 PostgreSQL-only test skipped**.
+- `test_api.py` passed as a separate API smoke script on a fresh SQLite
+  database.
+- `test_security.py` passed as a separate adversarial smoke script on a fresh
+  SQLite database.
+- Alembic upgrade through `f4c1a6d2e9b7` passed on isolated SQLite and
+  `alembic check` reported no schema drift.
+- Frontend production build, browser acceptance, and disposable PostgreSQL
+  migration testing were blocked because Node/npm and PostgreSQL/Docker tools
+  were unavailable in this shell. No live service was contacted.
+
 ## Latest Milestone 2 verification (2026-11-26)
 
 This update supersedes earlier test-count summaries for the current worktree.

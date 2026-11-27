@@ -402,3 +402,54 @@ class OrganizationAffiliationEvent(Base):
     to_status = Column(String(24), nullable=False)
     reason = Column(String(1000), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class CareConnection(Base):
+    __tablename__ = "care_connections"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('INITIATED', 'ACCEPTED', 'DECLINED', 'CLOSED')",
+            name="ck_care_connection_status",
+        ),
+        UniqueConstraint(
+            "patient_id", "provider_id", "organization_id",
+            name="uq_care_connection_patient_provider_org",
+        ),
+        Index("ix_care_connection_patient_status", "patient_id", "status"),
+        Index("ix_care_connection_provider_status", "provider_id", "status"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    patient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    status = Column(String(24), nullable=False, default="INITIATED", index=True)
+    reason = Column(String(1000), nullable=False)
+    provider_response = Column(String(1000), nullable=True)
+    initiated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    responded_at = Column(DateTime, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+
+
+class ProviderRecordRequest(Base):
+    __tablename__ = "provider_record_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED')",
+            name="ck_provider_record_request_status",
+        ),
+        Index("ix_record_request_patient_status", "patient_id", "status"),
+        Index("ix_record_request_provider_status", "provider_id", "status"),
+    )
+    id = Column(String, primary_key=True, default=gen_uuid)
+    patient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    provider_id = Column(String, ForeignKey("healthcare_providers.id"), nullable=False, index=True)
+    organization_id = Column(String, ForeignKey("healthcare_organizations.id"), nullable=False, index=True)
+    resource_types = Column(JSON, nullable=False, default=list)
+    purpose = Column(String(24), nullable=False, default="TREATMENT")
+    requested_duration_days = Column(Integer, nullable=False)
+    reason = Column(String(1000), nullable=False)
+    status = Column(String(24), nullable=False, default="REQUESTED", index=True)
+    response_reason = Column(String(1000), nullable=True)
+    consent_id = Column(String, ForeignKey("consents.id"), nullable=True, index=True)
+    requested_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    responded_at = Column(DateTime, nullable=True)

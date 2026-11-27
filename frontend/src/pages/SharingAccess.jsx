@@ -15,6 +15,8 @@ export default function SharingAccess({ token }) {
   const [organizations, setOrganizations] = useState([])
   const [consents, setConsents] = useState([])
   const [history, setHistory] = useState([])
+  const [recordRequests, setRecordRequests] = useState([])
+  const [careConnections, setCareConnections] = useState([])
   const [recipientType, setRecipientType] = useState('physician')
   const [doctorEmail, setDoctorEmail] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -33,11 +35,15 @@ export default function SharingAccess({ token }) {
       api.consentOrganizations(token),
       api.myConsents(token),
       api.accessHistory(token),
+      api.myPatientRecordRequests(token),
+      api.myPatientCareConnections(token),
     ])
     if (results[0].status === 'fulfilled') setPhysicians(results[0].value)
     if (results[1].status === 'fulfilled') setOrganizations(results[1].value)
     if (results[2].status === 'fulfilled') setConsents(results[2].value)
     if (results[3].status === 'fulfilled') setHistory(results[3].value)
+    if (results[4].status === 'fulfilled') setRecordRequests(results[4].value)
+    if (results[5].status === 'fulfilled') setCareConnections(results[5].value)
     const failed = results.find((result) => result.status === 'rejected')
     if (failed) setError(failed.reason?.message || 'Some access information could not be loaded.')
     setLoading(false)
@@ -69,6 +75,21 @@ export default function SharingAccess({ token }) {
       setResourceTypes(['Document'])
       await refresh()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  async function decideRequest(request, decision) {
+    setError(''); setMessage('')
+    setBusy(true)
+    try {
+      await api.decideRecordRequest(request.id, {
+        decision,
+        response_reason: decision === 'APPROVED'
+          ? 'I reviewed and approved this limited record-access request.'
+          : 'I declined this record-access request.',
+      }, token)
+      setMessage(decision === 'APPROVED' ? 'Record access approved.' : 'Record access request declined.')
+      await refresh()
+    } catch (requestError) { setError(requestError.message) } finally { setBusy(false) }
   }
 
   async function revoke(consent) {
@@ -110,6 +131,25 @@ export default function SharingAccess({ token }) {
         {availablePhysicians.length === 0 && !loading && <p className="muted">{recipientType === 'organization' ? 'No named physicians are available for this organization.' : 'No physicians are available to select right now.'}</p>}
         {message && <div className="success" role="status">{message}</div>}
         {error && <div className="error" role="alert">{error}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">PROVIDER REQUESTS</p><h2>Review record access requests</h2>
+        {recordRequests.length === 0 ? <p className="muted">No provider record-access requests are waiting or recorded.</p> : <div className="permission-list">{recordRequests.map((request) => <article className="permission-row" key={request.id}>
+          <div>
+            <strong>{request.provider_name} · {request.organization_name}</strong>
+            <small>Purpose: {request.purpose}</small>
+            <small>Requested records: {(request.resource_types || []).join(', ')}</small>
+            <small>Requested duration: {request.requested_duration_days} days</small>
+            <small>Reason: {request.reason}</small>
+          </div>
+          <div className="permission-status"><span className={`pill ${request.status === 'APPROVED' ? 'pill-active' : ''}`}>{request.status}</span>{request.status === 'REQUESTED' && <><button type="button" className="btn-primary" disabled={busy} onClick={() => decideRequest(request, 'APPROVED')}>Approve limited access</button><button type="button" className="btn-ghost" disabled={busy} onClick={() => decideRequest(request, 'REJECTED')}>Reject</button></>}</div>
+        </article>)}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">CARE CONNECTIONS</p><h2>Provider connection requests</h2>
+        {careConnections.length === 0 ? <p className="muted">You have not initiated a provider connection.</p> : <div className="permission-list">{careConnections.map((connection) => <article className="permission-row" key={connection.id}><div><strong>{connection.provider_name} · {connection.organization_name}</strong><small>{connection.reason}</small></div><span className={`pill ${connection.status === 'ACCEPTED' ? 'pill-active' : ''}`}>{connection.status}</span></article>)}</div>}
       </section>
 
       <section className="card">
