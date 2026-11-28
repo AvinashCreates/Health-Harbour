@@ -54,6 +54,8 @@ Never point migration commands at the existing personal/project database without
 ## Health and readiness
 
 - `GET /health/live` verifies process liveness.
+- In production, startup itself rejects local auth and unsafe CORS/trusted-host
+  configuration. It also rejects missing encryption/scanner configuration.
 - `GET /health/ready` verifies database and configured component readiness.
 - `GET /health` remains available as the compatibility health endpoint and verifies database/FHIR status.
 - `/audit/verify` verifies the application audit chain. A mismatch at historical entry #33 is a known baseline and must not trigger deletion or rehashing.

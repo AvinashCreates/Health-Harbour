@@ -152,7 +152,10 @@ def decide_exchange_request(
     if payload.decision == "REVOKED":
         if exchange.status != "APPROVED" or exchange.consent_id is None:
             raise HTTPException(status_code=409, detail="Only approved exchange consent can be revoked")
-        consent = db.query(models.Consent).filter(models.Consent.id == exchange.consent_id).with_for_update().first()
+        consent = db.query(models.Consent).filter(
+            models.Consent.id == exchange.consent_id,
+            models.Consent.patient_id == current_user.id,
+        ).with_for_update().first()
         if consent:
             consent.revoked_at = datetime.utcnow()
             fhir_consent = fhir_builder.build_consent(

@@ -95,7 +95,9 @@ must use private networks and least-privilege identities.
 
 - `/health/live` confirms only that the application process is alive.
 - `/health/ready` verifies database readiness and reports configuration/readiness
-  state for HAPI, encryption, scanner, and Fabric components.
+  state for HAPI, encryption, scanner, and Fabric components. HAPI performs a
+  capability check and ClamAV performs a PING when configured; Fabric currently
+  validates configuration rather than confirming a live gateway transaction.
 - Readiness responses contain component booleans only; they do not print URLs,
   credentials, key material or database connection strings.
 - Load balancers should use liveness/readiness separately and should not expose

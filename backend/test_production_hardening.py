@@ -18,7 +18,10 @@ class ProductionStartupConfigurationTests(unittest.TestCase):
             "DOCUMENT_SCAN_REQUIRED": "true",
             "DOCUMENT_SCANNER": "clamav",
             "CLAMAV_HOST": "clamav.internal",
-            "AUTH_PROVIDER": "local",
+            "AUTH_PROVIDER": "keycloak",
+            "KEYCLOAK_ISSUER": "https://identity.healthharbor.example/realms/healthharbor",
+            "KEYCLOAK_JWKS_URL": "https://identity.healthharbor.example/realms/healthharbor/protocol/openid-connect/certs",
+            "KEYCLOAK_AUDIENCE": "healthharbor-api",
             "FHIR_MODE": "local",
             "FABRIC_ENABLED": "false",
         }
@@ -37,8 +40,24 @@ class ProductionStartupConfigurationTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     main._validate_production_configuration()
 
+    def test_production_rejects_local_authentication_and_malformed_hosts(self):
+        environment = self._production_environment()
+        environment["AUTH_PROVIDER"] = "local"
+        with patch.dict(os.environ, environment, clear=False):
+            with patch.object(main, "DATABASE_URL", environment["DATABASE_URL"]):
+                with self.assertRaises(RuntimeError):
+                    main._validate_production_configuration()
+
+        for trusted in ("*", "https://demo.healthharbor.example", "localhost"):
+            environment = self._production_environment()
+            environment["TRUSTED_HOSTS"] = trusted
+            with patch.dict(os.environ, environment, clear=False):
+                with patch.object(main, "DATABASE_URL", environment["DATABASE_URL"]):
+                    with self.assertRaises(RuntimeError):
+                        main._validate_production_configuration()
+
     def test_production_rejects_cors_wildcard_and_loopback_origins(self):
-        for value in ("*", "http://localhost:5173"):
+        for value in ("*", "http://localhost:5173", "https://demo.healthharbor.example/path", "not-a-url"):
             environment = self._production_environment()
             environment["CORS_ORIGINS"] = value
             with patch.dict(os.environ, environment, clear=False):

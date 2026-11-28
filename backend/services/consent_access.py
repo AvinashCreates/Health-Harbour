@@ -103,7 +103,7 @@ def has_active_consent(
         return False
     grants = _active_consent_query(db, grantee_id, purpose).filter(
         models.Consent.patient_id == patient_id,
-    ).all()
+    ).with_for_update().all()
     return any(resource_type in (consent.resource_types or []) for consent in grants)
 
 

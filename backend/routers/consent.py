@@ -196,7 +196,7 @@ def list_consent_organizations(
 def revoke_consent(consent_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(require_roles("patient"))):
     consent = db.query(models.Consent).filter(
         models.Consent.id == consent_id, models.Consent.patient_id == current_user.id
-    ).first()
+    ).with_for_update().first()
     if not consent:
         raise HTTPException(status_code=404, detail="Consent record not found")
 

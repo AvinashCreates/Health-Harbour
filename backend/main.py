@@ -110,8 +110,16 @@ def _validate_production_configuration() -> None:
     origins = [origin.strip() for origin in configured_origins if origin.strip()]
     if not origins or "*" in origins:
         raise RuntimeError("Production requires explicit CORS_ORIGINS without wildcards")
-    if any(origin.startswith(("http://localhost", "http://127.0.0.1")) for origin in origins):
-        raise RuntimeError("Production CORS origins must not use loopback hosts")
+    from urllib.parse import urlsplit
+    for origin in origins:
+        parsed = urlsplit(origin)
+        if parsed.scheme not in {"https"} or not parsed.hostname:
+            raise RuntimeError("Production CORS origins must be HTTPS origins")
+        if parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            raise RuntimeError("Production CORS origins must contain only scheme and host")
+        hostname = parsed.hostname.lower()
+        if hostname in {"localhost", "127.0.0.1", "::1"} or hostname.endswith(".localhost"):
+            raise RuntimeError("Production CORS origins must not use loopback hosts")
 
     trusted_hosts = [
         host.strip()
@@ -120,6 +128,12 @@ def _validate_production_configuration() -> None:
     ]
     if not trusted_hosts or "*" in trusted_hosts:
         raise RuntimeError("Production requires explicit TRUSTED_HOSTS without wildcards")
+    for host in trusted_hosts:
+        if "://" in host or "/" in host or " " in host:
+            raise RuntimeError("Production TRUSTED_HOSTS must contain hostnames only")
+        hostname = host.lower().strip("[]")
+        if hostname in {"localhost", "127.0.0.1", "::1"} or hostname.endswith(".localhost"):
+            raise RuntimeError("Production TRUSTED_HOSTS must not use loopback hosts")
 
     if os.getenv("DOCUMENT_ENCRYPTION_REQUIRED", "false").strip().lower() != "true":
         raise RuntimeError("Production requires DOCUMENT_ENCRYPTION_REQUIRED=true")
@@ -154,6 +168,8 @@ def _validate_production_configuration() -> None:
         raise RuntimeError("Production requires CLAMAV_HOST")
 
     auth_provider = os.getenv("AUTH_PROVIDER", "local").strip().lower()
+    if auth_provider == "local":
+        raise RuntimeError("Production requires AUTH_PROVIDER=keycloak")
     if auth_provider == "keycloak":
         for name in ("KEYCLOAK_ISSUER", "KEYCLOAK_JWKS_URL", "KEYCLOAK_AUDIENCE"):
             if not os.getenv(name, "").strip():
@@ -268,7 +284,11 @@ def readiness(db: Session = Depends(get_db)):
 
     if os.getenv("DOCUMENT_SCAN_REQUIRED", "false").strip().lower() == "true":
         scanner = os.getenv("DOCUMENT_SCANNER", "unavailable").strip().lower()
-        components["scanner"] = scanner == "clamav" and bool(os.getenv("CLAMAV_HOST", "").strip())
+        if scanner == "clamav" and os.getenv("CLAMAV_HOST", "").strip():
+            from services.document_scanner import scanner_is_reachable
+            components["scanner"] = scanner_is_reachable()
+        else:
+            components["scanner"] = False
 
     if os.getenv("FABRIC_ENABLED", "false").strip().lower() == "true":
         try:

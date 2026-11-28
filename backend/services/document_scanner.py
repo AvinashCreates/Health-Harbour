@@ -52,6 +52,21 @@ class UnavailableDocumentScanner(DocumentScanner):
         return ScanResult("UNAVAILABLE", "Malware scanning is not configured")
 
 
+def scanner_is_reachable(timeout_seconds: float = 2.0) -> bool:
+    host = os.getenv("CLAMAV_HOST", "").strip()
+    if not host:
+        return False
+    port = int(os.getenv("CLAMAV_PORT", "3310") or "3310")
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds) as connection:
+            connection.settimeout(timeout_seconds)
+            connection.sendall(b"zPING\x00")
+            response = connection.recv(64)
+            return b"PONG" in response
+    except (socket.timeout, ConnectionError, OSError, ValueError):
+        return False
+
+
 def get_document_scanner() -> DocumentScanner:
     adapter = os.getenv("DOCUMENT_SCANNER", "unavailable").strip().lower()
     if adapter == "clamav":

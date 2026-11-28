@@ -4,6 +4,22 @@
 **Scope:** source review and locally executable evidence in the current repository  
 **Verdict:** **NOT PRODUCTION READY — locally demonstrated prototype with multiple deployment-critical gaps**
 
+## Milestone 9.1/Prompt 15 verification update — 2026-11-28
+
+- Production startup now rejects SQLite, local auth, wildcard/loopback CORS,
+  malformed or loopback trusted hosts, missing/invalid encryption keys,
+  disabled scanning, unavailable scanner adapters, missing ClamAV hosts,
+  and missing enabled Keycloak/HAPI/Fabric configuration.
+- `/health/live` and `/health/ready` are implemented and tested locally.
+- `/health/ready` performs a real database query and live HAPI capability check
+  when HAPI is enabled. Scanner readiness performs a ClamAV PING where enabled;
+  Fabric readiness currently validates configuration rather than a live gateway
+  transaction or peer connection.
+- Relevant security suite: 88 tests passed with 1 PostgreSQL-only audit test
+  skipped. SQLite migration chain and `alembic check` passed.
+- Live PostgreSQL, live HAPI, live Fabric, live ClamAV and live KMS remain
+  unverified.
+
 ## Milestone 9.1 hardening update — 2026-11-28
 
 - Production startup now rejects SQLite database URLs.
