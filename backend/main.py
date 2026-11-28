@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -94,6 +95,81 @@ async def fhir_integration_error_handler(request: Request, exc: FHIRIntegrationE
         content={"detail": detail},
     )
 
+def _validate_production_configuration() -> None:
+    if os.getenv("APP_ENV", "development").strip().lower() != "production":
+        return
+
+    database_url = DATABASE_URL.strip().lower()
+    if not database_url.startswith("postgresql"):
+        raise RuntimeError("Production requires a PostgreSQL DATABASE_URL")
+
+    configured_origins = os.getenv(
+        "CORS_ORIGINS",
+        "",
+    ).split(",")
+    origins = [origin.strip() for origin in configured_origins if origin.strip()]
+    if not origins or "*" in origins:
+        raise RuntimeError("Production requires explicit CORS_ORIGINS without wildcards")
+    if any(origin.startswith(("http://localhost", "http://127.0.0.1")) for origin in origins):
+        raise RuntimeError("Production CORS origins must not use loopback hosts")
+
+    trusted_hosts = [
+        host.strip()
+        for host in os.getenv("TRUSTED_HOSTS", "").split(",")
+        if host.strip()
+    ]
+    if not trusted_hosts or "*" in trusted_hosts:
+        raise RuntimeError("Production requires explicit TRUSTED_HOSTS without wildcards")
+
+    if os.getenv("DOCUMENT_ENCRYPTION_REQUIRED", "false").strip().lower() != "true":
+        raise RuntimeError("Production requires DOCUMENT_ENCRYPTION_REQUIRED=true")
+
+    key = os.getenv("DOCUMENT_ENCRYPTION_KEY", "").strip()
+    if not key:
+        raise RuntimeError("Production requires DOCUMENT_ENCRYPTION_KEY")
+    try:
+        import base64
+        if len(key) == 64:
+            try:
+                decoded = bytes.fromhex(key)
+                if len(decoded) != 32:
+                    raise ValueError
+            except Exception:
+                decoded = base64.b64decode(key, validate=True)
+        else:
+            decoded = base64.b64decode(key, validate=True)
+    except Exception:
+        try:
+            decoded = bytes.fromhex(key)
+        except Exception as exc:
+            raise RuntimeError("DOCUMENT_ENCRYPTION_KEY must be base64 or hexadecimal") from exc
+    if len(decoded) != 32:
+        raise RuntimeError("DOCUMENT_ENCRYPTION_KEY must encode exactly 32 bytes")
+
+    if os.getenv("DOCUMENT_SCAN_REQUIRED", "false").strip().lower() != "true":
+        raise RuntimeError("Production requires DOCUMENT_SCAN_REQUIRED=true")
+    if os.getenv("DOCUMENT_SCANNER", "unavailable").strip().lower() != "clamav":
+        raise RuntimeError("Production requires the ClamAV document scanner")
+    if not os.getenv("CLAMAV_HOST", "").strip():
+        raise RuntimeError("Production requires CLAMAV_HOST")
+
+    auth_provider = os.getenv("AUTH_PROVIDER", "local").strip().lower()
+    if auth_provider == "keycloak":
+        for name in ("KEYCLOAK_ISSUER", "KEYCLOAK_JWKS_URL", "KEYCLOAK_AUDIENCE"):
+            if not os.getenv(name, "").strip():
+                raise RuntimeError(f"Production requires {name}")
+
+    fhir_mode = os.getenv("FHIR_MODE", "local").strip().lower()
+    if fhir_mode == "hapi" and not os.getenv("FHIR_SERVER_URL", "").strip():
+        raise RuntimeError("Production FHIR_MODE=hapi requires FHIR_SERVER_URL")
+
+    if os.getenv("FABRIC_ENABLED", "false").strip().lower() == "true":
+        ledger_enabled()
+
+
+_validate_production_configuration()
+
+
 allowed_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -102,6 +178,16 @@ allowed_origins = [
     ).split(",")
     if origin.strip()
 ]
+
+trusted_hosts = [
+    host.strip()
+    for host in os.getenv(
+        "TRUSTED_HOSTS",
+        "localhost,127.0.0.1,testserver",
+    ).split(",")
+    if host.strip()
+]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 
 app.add_middleware(
     CORSMiddleware,
@@ -138,6 +224,63 @@ app.include_router(clinical.router)
 @app.get("/")
 def root():
     return {"status": "ok", "service": "healthcare-exchange-backend"}
+
+
+@app.get("/health/live")
+def health_live():
+    return {"status": "alive", "service": "healthharbor-backend"}
+
+
+@app.get("/health/ready")
+def readiness(db: Session = Depends(get_db)):
+    components = {"database": False, "fhir": True, "scanner": True, "encryption": True, "fabric": True}
+    try:
+        db.execute(text("SELECT 1"))
+        components["database"] = True
+    except SQLAlchemyError:
+        pass
+
+    if os.getenv("FHIR_MODE", "local").strip().lower() == "hapi":
+        try:
+            check_r4_server()
+        except FHIRIntegrationError:
+            components["fhir"] = False
+
+    if os.getenv("DOCUMENT_ENCRYPTION_REQUIRED", "false").strip().lower() == "true":
+        try:
+            key = os.getenv("DOCUMENT_ENCRYPTION_KEY", "").strip()
+            if not key:
+                components["encryption"] = False
+            else:
+                try:
+                    import base64
+                    decoded = base64.b64decode(key, validate=True)
+                except Exception:
+                    try:
+                        decoded = bytes.fromhex(key)
+                    except Exception:
+                        components["encryption"] = False
+                        decoded = b""
+                if len(decoded) != 32:
+                    components["encryption"] = False
+        except Exception:
+            components["encryption"] = False
+
+    if os.getenv("DOCUMENT_SCAN_REQUIRED", "false").strip().lower() == "true":
+        scanner = os.getenv("DOCUMENT_SCANNER", "unavailable").strip().lower()
+        components["scanner"] = scanner == "clamav" and bool(os.getenv("CLAMAV_HOST", "").strip())
+
+    if os.getenv("FABRIC_ENABLED", "false").strip().lower() == "true":
+        try:
+            components["fabric"] = ledger_enabled()
+        except Exception:
+            components["fabric"] = False
+
+    ready = all(components.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "degraded", "components": components},
+    )
 
 
 @app.get("/health")

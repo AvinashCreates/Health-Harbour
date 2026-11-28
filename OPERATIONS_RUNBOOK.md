@@ -8,6 +8,11 @@ This runbook covers safe local demonstration and planned production operations. 
 
 1. Verify `APP_ENV=production` only on production processes.
 2. Verify `JWT_SECRET` is unique and at least 32 characters; never print or log it.
+   Production startup rejects SQLite, wildcard or loopback CORS origins,
+   missing trusted hosts, disabled encryption, invalid encryption keys,
+   disabled scanning, unavailable scanner adapters, missing ClamAV hosts,
+   missing Keycloak settings when OIDC is enabled, missing HAPI URLs when HAPI
+   is enabled, and invalid Fabric configuration.
 3. Verify the database migration identity can run `alembic upgrade head`.
 4. Verify `DATABASE_URL` points to the intended database; use read-only inspection first.
 5. Verify encrypted document storage is enabled when required and the decryption key is available.
@@ -48,7 +53,9 @@ Never point migration commands at the existing personal/project database without
 
 ## Health and readiness
 
-- `GET /health` verifies database readiness and, in HAPI mode, HAPI capability readiness.
+- `GET /health/live` verifies process liveness.
+- `GET /health/ready` verifies database and configured component readiness.
+- `GET /health` remains available as the compatibility health endpoint and verifies database/FHIR status.
 - `/audit/verify` verifies the application audit chain. A mismatch at historical entry #33 is a known baseline and must not trigger deletion or rehashing.
 - `/api/v1/admin/fhir/sync/status` exposes FHIR outbox counts for administrators.
 - `/audit/ledger` exposes Fabric outbox status and transaction IDs to administrators.

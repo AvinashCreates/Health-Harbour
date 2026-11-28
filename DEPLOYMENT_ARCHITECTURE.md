@@ -22,13 +22,13 @@ HAPI FHIR is an interoperability mirror, not an authorization engine. Fabric is 
 
 - `APP_ENV=development`
 - `DATABASE_URL=sqlite:///...` or a disposable SQLite file
-- `AUTH_PROVIDER=local`
+- `AUTH_PROVIDER=local` (development) or explicit Keycloak issuer/JWKS/audience (production)
 - `FHIR_MODE=local`
 - `FABRIC_ENABLED=false`
 - `FILE_STORAGE_PATH` pointing outside publicly served frontend directories
-- `DOCUMENT_ENCRYPTION_REQUIRED=false|true`
+- `DOCUMENT_ENCRYPTION_REQUIRED=false|true` (production requires `true`)
 - `DOCUMENT_ENCRYPTION_KEY` only when encryption is required
-- `DOCUMENT_SCAN_REQUIRED=false|true`
+- `DOCUMENT_SCAN_REQUIRED=false|true` (production requires `true` with ClamAV)
 - `DOCUMENT_SCANNER=unavailable|clamav`
 
 Use synthetic accounts and test data only.
@@ -90,6 +90,19 @@ must use private networks and least-privilege identities.
 9. **Fabric:** permissioned network, gateway identities, transaction confirmation and pseudonymous event payloads.
 10. **Workers:** independent FHIR and Fabric workers with bounded retries and dead-letter/failed-state handling.
 11. **Observability:** structured logs, metrics, traces, health/readiness endpoints, backup monitoring and alerting.
+
+## Health and readiness
+
+- `/health/live` confirms only that the application process is alive.
+- `/health/ready` verifies database readiness and reports configuration/readiness
+  state for HAPI, encryption, scanner, and Fabric components.
+- Readiness responses contain component booleans only; they do not print URLs,
+  credentials, key material or database connection strings.
+- Load balancers should use liveness/readiness separately and should not expose
+  readiness JSON to public users.
+
+Production startup additionally rejects insecure database, CORS, trusted-host,
+key, scanner, authentication, HAPI and Fabric configuration combinations.
 
 ## Network isolation
 

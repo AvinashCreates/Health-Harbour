@@ -34,7 +34,13 @@ class LocalDocumentStorage:
         if not encoded:
             raise EncryptionConfigurationError("DOCUMENT_ENCRYPTION_KEY is required when document encryption is enabled")
         try:
-            key = base64.b64decode(encoded, validate=True)
+            if len(encoded) == 64:
+                try:
+                    key = bytes.fromhex(encoded)
+                except Exception:
+                    key = base64.b64decode(encoded, validate=True)
+            else:
+                key = base64.b64decode(encoded, validate=True)
         except Exception:
             try:
                 key = bytes.fromhex(encoded)

@@ -4,6 +4,17 @@
 **Scope:** source review and locally executable evidence in the current repository  
 **Verdict:** **NOT PRODUCTION READY — locally demonstrated prototype with multiple deployment-critical gaps**
 
+## Milestone 9.1 hardening update — 2026-11-28
+
+- Production startup now rejects SQLite database URLs.
+- Production startup rejects wildcard or loopback CORS origins.
+- Production startup requires explicit trusted hosts.
+- Production startup requires encryption enabled and a valid 32-byte key.
+- Production startup requires a ClamAV scanner host and scan-required mode.
+- Keycloak issuer/JWKS/audience, HAPI URL, and Fabric configuration are fail-fast validated according to enabled modes.
+- Added `/health/live` and `/health/ready` endpoints. Readiness reports database, FHIR, scanner, encryption, and Fabric component state without secrets.
+- Development mode remains usable with SQLite, local auth, loopback CORS, and optional integrations.
+
 ## Executive summary
 
 HealthHarbor has substantial application functionality: local authentication, registry workflows, consent-aware record exchange, encrypted document storage, FHIR synchronization state, a Fabric outbox, audit chaining, and clinical workflows. Backend behavior has been exercised extensively on isolated SQLite databases and through unit/API/security suites.
