@@ -27,11 +27,14 @@ export default function DoctorDashboard({ token }) {
   const [reviewForm, setReviewForm] = useState({ patient_id: '', organization_id: '', diagnostic_report_id: '', status: 'REVIEWED', clinical_note: '' })
   const [providerAffiliations, setProviderAffiliations] = useState([])
   const [crossHospitalExchanges, setCrossHospitalExchanges] = useState([])
+  const [crossHospitalDocuments, setCrossHospitalDocuments] = useState({})
+  const [crossHospitalDocumentBusy, setCrossHospitalDocumentBusy] = useState('')
   const [registryOrganizations, setRegistryOrganizations] = useState([])
   const [crossHospitalForm, setCrossHospitalForm] = useState({ patient_id: '', source_organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
   const [recordRequestForm, setRecordRequestForm] = useState({ patient_id: '', organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
   const [submittingPrescription, setSubmittingPrescription] = useState(false)
   const [submittingReview, setSubmittingReview] = useState(false)
+  const [transitioningPrescriptionId, setTransitioningPrescriptionId] = useState('')
 
   async function refresh() {
     setErr('')
@@ -59,6 +62,7 @@ export default function DoctorDashboard({ token }) {
     setRecordRequests(value(5, []))
     setProviderAffiliations(value(6, []))
     setCrossHospitalExchanges(value(7, []))
+    setCrossHospitalDocuments({})
     setRegistryOrganizations(value(8, []))
     setPrescriptions(value(9, []))
     setClinicalReviews(value(10, []))
@@ -97,6 +101,39 @@ export default function DoctorDashboard({ token }) {
     } catch (e) { setErr(e.message) }
   }
 
+  async function loadCrossHospitalDocuments(exchange) {
+    setErr(''); setMessage(''); setCrossHospitalDocumentBusy(exchange.id)
+    try {
+      const documents = await api.crossHospitalExchangeDocuments(exchange.id, token)
+      setCrossHospitalDocuments((current) => ({ ...current, [exchange.id]: documents }))
+      setMessage(documents.length ? `${documents.length} approved source document(s) available.` : 'No approved source documents are available.')
+    } catch (e) { setErr(e.message) } finally { setCrossHospitalDocumentBusy('') }
+  }
+
+  async function downloadCrossHospitalDocument(exchange, document) {
+    setErr(''); setMessage(''); setCrossHospitalDocumentBusy(document.id)
+    try {
+      const blob = await api.downloadCrossHospitalExchangeDocument(exchange.id, document.id, token)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = document.filename || 'health-record'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setMessage('Approved source document downloaded.')
+    } catch (e) { setErr(e.message) } finally { setCrossHospitalDocumentBusy('') }
+  }
+
+  async function importCrossHospitalDocument(exchange, document) {
+    setErr(''); setMessage(''); setCrossHospitalDocumentBusy(document.id)
+    try {
+      await api.importCrossHospitalDocument(exchange.id, document.id, token)
+      setMessage('Source document provenance recorded for the receiving organization.')
+    } catch (e) { setErr(e.message) } finally { setCrossHospitalDocumentBusy('') }
+  }
+
   async function submitCrossHospitalExchange(e) {
     e.preventDefault()
     setErr(''); setMessage('')
@@ -133,12 +170,13 @@ export default function DoctorDashboard({ token }) {
   }
 
   async function transitionPrescription(prescription, status) {
-    setErr(''); setMessage('')
+    if (transitioningPrescriptionId) return
+    setErr(''); setMessage(''); setTransitioningPrescriptionId(prescription.id)
     try {
       await api.transitionPrescription(prescription.id, { status, reason: `Provider changed prescription status to ${status.toLowerCase()}.` }, token)
       setMessage(`Prescription ${status.toLowerCase()}.`)
       await refresh()
-    } catch (e) { setErr(e.message) }
+    } catch (e) { setErr(e.message) } finally { setTransitioningPrescriptionId('') }
   }
 
   async function submitClinicalReview(e) {
@@ -205,7 +243,7 @@ export default function DoctorDashboard({ token }) {
           <label>Care reason<textarea rows="3" required minLength="3" maxLength="1000" value={crossHospitalForm.reason} onChange={(e) => setCrossHospitalForm((f) => ({ ...f, reason: e.target.value }))} /></label>
           <button className="btn-primary" type="submit" disabled={!crossHospitalForm.patient_id || !crossHospitalForm.source_organization_id || !crossHospitalForm.resource_types.length || !crossHospitalForm.reason}>Send patient approval request</button>
         </form>
-        {crossHospitalExchanges.length > 0 && <div className="registry-list">{crossHospitalExchanges.map((exchange) => <div className="report" key={exchange.id}><strong>{exchange.requesting_organization_name} → {exchange.source_organization_name}</strong><span className="muted">{exchange.patient_name} · {exchange.status}</span><span>{exchange.resource_types.join(', ')} · {exchange.requested_duration_days} days</span>{exchange.status === 'APPROVED' && <>{exchange.resource_types.includes('Document') && <button className="btn-ghost" type="button" onClick={async () => { try { const documents = await api.crossHospitalExchangeDocuments(exchange.id, token); setMessage(documents.length ? `${documents.length} approved source document(s) available.` : 'No approved source documents are available.') } catch (e) { setErr(e.message) } }}>View approved source documents</button>}</>}</div>)}</div>}
+        {crossHospitalExchanges.length > 0 && <div className="registry-list">{crossHospitalExchanges.map((exchange) => <div className="report" key={exchange.id}><strong>{exchange.requesting_organization_name} → {exchange.source_organization_name}</strong><span className="muted">{exchange.patient_name} · {exchange.status}</span><span>{exchange.resource_types.join(', ')} · {exchange.requested_duration_days} days</span>{exchange.status === 'APPROVED' && exchange.resource_types.includes('Document') && <><button className="btn-ghost" type="button" disabled={crossHospitalDocumentBusy === exchange.id} onClick={() => loadCrossHospitalDocuments(exchange)}>{crossHospitalDocumentBusy === exchange.id ? 'Loading…' : 'View approved source documents'}</button>{(crossHospitalDocuments[exchange.id] || []).map((document) => <div className="report" key={document.id}><strong>{document.filename}</strong><span>{document.category} · {document.source_organization_id}</span><div className="registry-actions"><button className="btn-ghost" type="button" disabled={crossHospitalDocumentBusy === document.id} onClick={() => downloadCrossHospitalDocument(exchange, document)}>Download</button><button className="btn-ghost" type="button" disabled={crossHospitalDocumentBusy === document.id} onClick={() => importCrossHospitalDocument(exchange, document)}>Record import</button></div></div>)}</>}</div>)}</div>}
       </section>
 
       <section className="card">
@@ -234,7 +272,7 @@ export default function DoctorDashboard({ token }) {
           <label>Instructions<textarea rows="3" maxLength={1000} value={prescriptionForm.instructions} onChange={(e) => setPrescriptionForm((f) => ({ ...f, instructions: e.target.value }))} /></label>
           <button className="btn-primary" type="submit" disabled={submittingPrescription}>{submittingPrescription ? 'Creating…' : 'Create prescription'}</button>
         </form>
-        {prescriptions.map((prescription) => <div className="report" key={prescription.id}><strong>{prescription.medication_name} · {prescription.dosage}</strong><span className="muted">{prescription.patient_name} · {prescription.status}</span>{!['CANCELLED', 'COMPLETED', 'STOPPED'].includes(prescription.status) && <div className="registry-actions"><button className="btn-ghost" onClick={() => transitionPrescription(prescription, 'STOPPED')}>Stop</button><button className="btn-ghost" onClick={() => transitionPrescription(prescription, 'CANCELLED')}>Cancel</button></div>}</div>)}
+        {prescriptions.map((prescription) => <div className="report" key={prescription.id}><strong>{prescription.medication_name} · {prescription.dosage}</strong><span className="muted">{prescription.patient_name} · {prescription.status}</span>{!['CANCELLED', 'COMPLETED', 'STOPPED'].includes(prescription.status) && <div className="registry-actions"><button className="btn-ghost" disabled={transitioningPrescriptionId === prescription.id} onClick={() => transitionPrescription(prescription, 'STOPPED')}>{transitioningPrescriptionId === prescription.id ? 'Saving…' : 'Stop'}</button><button className="btn-ghost" disabled={transitioningPrescriptionId === prescription.id} onClick={() => transitionPrescription(prescription, 'CANCELLED')}>Cancel</button></div>}</div>)}
       </section>
 
       <section className="card">

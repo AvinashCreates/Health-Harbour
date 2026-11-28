@@ -1,5 +1,22 @@
 # Testing report
 
+## Milestone 8.2 frontend integration audit (2026-11-28)
+
+- Frontend API contract review completed for Doctor, Patient/Sharing, and
+  Laboratory clinical workflows.
+- Corrected stale patient-side clinical-state handling: refreshed data is cleared
+  first and only fulfilled API results repopulate the view.
+- Corrected Doctor prescription-state duplication prevention and added explicit
+  refresh/fail states for mutation actions.
+- Added actual approved cross-hospital source-document listing, download, and
+  import actions to the Doctor dashboard using existing backend APIs.
+- Replaced laboratory report amendment browser prompts with an inline validated
+  form; report amendment still uses the existing backend authorization and lifecycle.
+- Static frontend diagnostics found no errors in modified React/API files.
+- Node/npm and browser automation remained unavailable; no production build or
+  browser workflow was claimed.
+
+
 ## Milestone 8.1 end-to-end clinical-workflow verification (2026-11-27)
 
 - Complete synthetic clinical journey passed: patient, consent, doctor lab

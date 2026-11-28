@@ -127,6 +127,10 @@ export const api = {
   myProviderCrossHospitalExchanges: (token) => request('/api/v1/cross-hospital/exchange-requests/me/provider', { token }),
   decideCrossHospitalExchange: (id, payload, token) => request(`/api/v1/cross-hospital/exchange-requests/${encodeURIComponent(id)}/patient-decision`, { method: 'POST', body: payload, token }),
   crossHospitalExchangeDocuments: (id, token) => request(`/api/v1/cross-hospital/exchange-requests/${encodeURIComponent(id)}/documents`, { token }),
+  downloadCrossHospitalExchangeDocument: async (exchangeId, documentId, token) => {
+    const response = await request(`/api/v1/cross-hospital/exchange-requests/${encodeURIComponent(exchangeId)}/documents/${encodeURIComponent(documentId)}/download`, { token })
+    return response.blob()
+  },
   importCrossHospitalDocument: (exchangeId, documentId, token) => request(`/api/v1/cross-hospital/exchange-requests/${encodeURIComponent(exchangeId)}/documents/${encodeURIComponent(documentId)}/import`, { method: 'POST', token }),
   createPrescription: (payload, token) => request('/api/v1/prescriptions', { method: 'POST', body: payload, token }),
   transitionPrescription: (id, payload, token) => request(`/api/v1/prescriptions/${encodeURIComponent(id)}/transition`, { method: 'POST', body: payload, token }),

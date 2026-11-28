@@ -35,6 +35,17 @@ export default function SharingAccess({ token }) {
 
   const refresh = useCallback(async () => {
     setError('')
+    setPhysicians([])
+    setOrganizations([])
+    setConsents([])
+    setHistory([])
+    setPrescriptions([])
+    setClinicalReviews([])
+    setLaboratoryOrders([])
+    setDiagnosticReports([])
+    setRecordRequests([])
+    setCareConnections([])
+    setCrossHospitalExchanges([])
     const results = await Promise.allSettled([
       api.listPhysicians(token),
       api.consentOrganizations(token),

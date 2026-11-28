@@ -31,6 +31,7 @@ export default function LabDashboard({ token, user }) {
 
   async function refresh() {
     setLoading(true)
+    setRequests([])
     setErr('')
     try {
       setRequests(await api.listServiceRequests(token))
