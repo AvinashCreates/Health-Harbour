@@ -4,6 +4,7 @@ Run with: python seed.py
 """
 import os
 import uuid
+import hashlib
 from datetime import datetime, timedelta
 
 import models
@@ -11,6 +12,7 @@ from auth_utils import hash_password
 from database import Base, DATABASE_URL, SessionLocal, engine
 from services import audit_logger, fhir_builder
 from services.fhir_server import persist_resource
+from services.document_storage import get_document_storage
 
 
 def _configured_password(environment_name):
@@ -124,6 +126,106 @@ doctor2 = make_user("Dr. Arjun Mehta", "arjun.doctor@example.com", "doctor")
 lab1 = make_user("Central Diagnostics Lab", "lab@example.com", "lab")
 admin1 = make_user("System Admin", "admin@example.com", "admin")
 
+org_a = db.query(models.HealthcareOrganization).filter(
+    models.HealthcareOrganization.legacy_user_id == lab1.id,
+).first()
+if org_a is None:
+    org_a = models.HealthcareOrganization(
+        legacy_user_id=lab1.id,
+        legal_name="Central Diagnostics Hospital",
+        display_name="Central Diagnostics Hospital",
+        organization_type="DIAGNOSTIC_LABORATORY",
+        registration_authority="Synthetic Health Authority",
+        registration_identifier="SYN-ORG-A",
+        address={"city": "Hyderabad", "country": "IN"},
+        administrative_contact_name="Central Diagnostics Admin",
+        administrative_contact_email="lab@example.com",
+        status="APPROVED",
+        fhir_resource_id=lab1.fhir_resource_id or lab1.id,
+    )
+    db.add(org_a)
+    db.flush()
+else:
+    org_a.status = "APPROVED"
+
+org_b = db.query(models.HealthcareOrganization).filter(
+    models.HealthcareOrganization.registration_identifier == "SYN-ORG-B",
+).first()
+if org_b is None:
+    org_b = models.HealthcareOrganization(
+        legal_name="Harbor Specialty Hospital",
+        display_name="Harbor Specialty Hospital",
+        organization_type="HOSPITAL",
+        registration_authority="Synthetic Health Authority",
+        registration_identifier="SYN-ORG-B",
+        address={"city": "Bengaluru", "country": "IN"},
+        administrative_contact_name="Harbor Specialty Admin",
+        administrative_contact_email="hospital-b@example.com",
+        status="APPROVED",
+    )
+    db.add(org_b)
+    db.flush()
+else:
+    org_b.status = "APPROVED"
+
+provider1 = db.query(models.HealthcareProvider).filter(
+    models.HealthcareProvider.account_id == doctor1.id,
+).first()
+if provider1 is None:
+    provider1 = models.HealthcareProvider(
+        account_id=doctor1.id,
+        professional_name="Dr. Priya Sharma",
+        registration_authority="Synthetic Medical Council",
+        registration_number="SYN-PROVIDER-1",
+        qualifications=["Synthetic MD"],
+        specialization="Internal Medicine",
+        status="VERIFIED",
+        fhir_resource_id=doctor1.fhir_resource_id or doctor1.id,
+    )
+    db.add(provider1)
+    db.flush()
+else:
+    provider1.status = "VERIFIED"
+
+provider2 = db.query(models.HealthcareProvider).filter(
+    models.HealthcareProvider.account_id == doctor2.id,
+).first()
+if provider2 is None:
+    provider2 = models.HealthcareProvider(
+        account_id=doctor2.id,
+        professional_name="Dr. Arjun Mehta",
+        registration_authority="Synthetic Medical Council",
+        registration_number="SYN-PROVIDER-2",
+        qualifications=["Synthetic MD"],
+        specialization="Cardiology",
+        status="VERIFIED",
+        fhir_resource_id=doctor2.fhir_resource_id or doctor2.id,
+    )
+    db.add(provider2)
+    db.flush()
+else:
+    provider2.status = "VERIFIED"
+
+for organization, provider in ((org_a, provider1), (org_b, provider2)):
+    affiliation = db.query(models.OrganizationAffiliation).filter(
+        models.OrganizationAffiliation.organization_id == organization.id,
+        models.OrganizationAffiliation.provider_id == provider.id,
+    ).first()
+    if affiliation is None:
+        db.add(models.OrganizationAffiliation(
+            organization_id=organization.id,
+            provider_id=provider.id,
+            account_id=provider.account_id,
+            organization_role="PROVIDER",
+            status="ACTIVE",
+            invited_by_id=admin1.id,
+            effective_from=datetime.utcnow(),
+        ))
+    else:
+        affiliation.status = "ACTIVE"
+
+db.commit()
+
 already_seeded = db.query(models.Consent).filter(
     models.Consent.patient_id == patient1.id, models.Consent.grantee_id == doctor1.id
 ).first()
@@ -132,7 +234,8 @@ if not already_seeded:
     consent = models.Consent(
         patient_id=patient1.id,
         grantee_id=doctor1.id,
-        resource_types=["Patient", "ServiceRequest", "Observation", "DiagnosticReport"],
+        organization_id=org_a.id,
+        resource_types=["Patient", "ServiceRequest", "Observation", "DiagnosticReport", "Document", "MedicationRequest"],
         granted_at=datetime.utcnow(),
         expires_at=datetime.utcnow() + timedelta(days=30),
     )
@@ -141,6 +244,7 @@ if not already_seeded:
     fhir_consent = fhir_builder.build_consent(
         consent.id, patient1.fhir_resource_id, doctor1.fhir_resource_id,
         consent.resource_types, consent.granted_at, consent.expires_at,
+        organization_ref=org_a.fhir_resource_id or org_a.id,
     )
     persist_resource(fhir_consent)
     db.commit()
@@ -212,6 +316,83 @@ if not already_seeded:
         ))
     db.commit()
     audit_logger.log_event(db, lab1.id, "DIAGNOSTIC_REPORT_UPLOADED", {"patient_id": patient1.id, "report_fhir_id": report_fhir_id})
+
+    file_content = b"Synthetic fasting glucose report: 96 mg/dL. This is not medical advice."
+    digest = hashlib.sha256(file_content).hexdigest()
+    storage_key = f"{uuid.uuid4().hex}.blob"
+    storage = get_document_storage()
+    storage_path, encryption_version, encryption_key_id = storage.write_new(storage_key, file_content)
+    document_id = str(uuid.uuid4())
+    document = models.ClinicalFile(
+        id=document_id,
+        patient_id=patient1.id,
+        uploaded_by_id=lab1.id,
+        service_request_id=sr_record.id,
+        filename="fasting-glucose-synthetic.txt",
+        storage_key=storage_key,
+        media_type="text/plain",
+        category="laboratory-report",
+        size_bytes=len(file_content),
+        sha256=digest,
+        source_organization_id=org_a.id,
+        custodian_organization_id=org_a.id,
+        processing_status="CLEAN",
+        scan_status="NOT_REQUIRED",
+        encryption_version=encryption_version,
+        encryption_key_id=encryption_key_id,
+    )
+    db.add(document)
+    db.commit()
+
+    prescription = models.Prescription(
+        patient_id=patient1.id,
+        provider_id=provider1.id,
+        organization_id=org_a.id,
+        medication_name="Synthetic Wellness Supplement",
+        dosage="1 synthetic unit",
+        route="oral",
+        frequency="once daily",
+        duration="7 days",
+        quantity="7 units",
+        instructions="Synthetic demonstration only; no real medication advice.",
+        status="ACTIVE",
+    )
+    db.add(prescription)
+    db.flush()
+    db.add(models.PrescriptionHistory(
+        prescription_id=prescription.id,
+        actor_id=doctor1.id,
+        from_status=None,
+        to_status="ACTIVE",
+        reason="Synthetic demo prescription",
+    ))
+
+    review = models.PhysicianClinicalReview(
+        patient_id=patient1.id,
+        provider_id=provider1.id,
+        organization_id=org_a.id,
+        diagnostic_report_id=report_fhir_id,
+        service_request_id=sr_record.id,
+        status="REVIEWED",
+        clinical_note="Synthetic review: fasting glucose is within the simulated reference range.",
+        reviewed_at=datetime.utcnow(),
+    )
+    db.add(review)
+    db.commit()
+    audit_logger.log_event(db, doctor1.id, "PRESCRIPTION_CREATED", {
+        "prescription_id": prescription.id,
+        "patient_id": patient1.id,
+        "provider_id": provider1.id,
+        "organization_id": org_a.id,
+        "medication_name": prescription.medication_name,
+    })
+    audit_logger.log_event(db, doctor1.id, "PHYSICIAN_CLINICAL_REVIEW_RECORDED", {
+        "patient_id": patient1.id,
+        "provider_id": provider1.id,
+        "organization_id": org_a.id,
+        "report_id": report_fhir_id,
+        "status": "REVIEWED",
+    })
     print("Sample consent + ServiceRequest + DiagnosticReport chain created for Asha Rao / Dr. Priya Sharma.")
 else:
     print("Sample workflow already present -- skipped.")
