@@ -18,6 +18,23 @@
 - Node/npm, browser automation, PostgreSQL, live HAPI, live Fabric, and live
   ClamAV remain unavailable and unverified.
 
+## Milestone 8.1 frontend clinical-workflow verification (2026-11-27)
+
+- Frontend static diagnostics: no errors found in modified Doctor, Sharing,
+  Laboratory, and API client source files.
+- Backend relevant suite: **81 tests passed, 1 PostgreSQL-only audit concurrency
+  test skipped**.
+- API smoke test passed; security smoke test passed.
+- Complete SQLite migration chain and `alembic check` passed.
+- The patient Sharing workspace now loads laboratory orders, reports,
+  prescriptions, and clinical reviews through authenticated APIs.
+- The doctor workspace now uses report selectors and disabled duplicate-submit
+  states for prescription and clinical-review mutations.
+- The laboratory workspace now uses an inline report-amendment form instead of
+  browser prompt dialogs.
+- Node/npm, browser automation, live PostgreSQL, HAPI, Fabric, and live HAPI
+  remain unavailable or unverified.
+
 ## Latest Milestone 10 clinical-workflow verification (2026-11-27)
 
 - Added two focused clinical workflow tests covering prescription lifecycle,

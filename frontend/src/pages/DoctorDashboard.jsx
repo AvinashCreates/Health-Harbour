@@ -30,25 +30,41 @@ export default function DoctorDashboard({ token }) {
   const [registryOrganizations, setRegistryOrganizations] = useState([])
   const [crossHospitalForm, setCrossHospitalForm] = useState({ patient_id: '', source_organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
   const [recordRequestForm, setRecordRequestForm] = useState({ patient_id: '', organization_id: '', resource_types: ['Document'], requested_duration_days: 30, reason: '' })
+  const [submittingPrescription, setSubmittingPrescription] = useState(false)
+  const [submittingReview, setSubmittingReview] = useState(false)
 
   async function refresh() {
-    try {
-      const [p, l, r, d, c, q, affiliations, exchanges, organizations, providerPrescriptions, providerReviews] = await Promise.all([
-        api.accessiblePatients(token),
-        api.listLaboratories(token),
-        api.listServiceRequests(token),
-        api.listDiagnosticReports(token),
-        api.myProviderCareConnections(token),
-        api.myProviderRecordRequests(token),
-        api.myProviderAffiliations(token),
-        api.myProviderCrossHospitalExchanges(token),
-        api.registryOrganizations(token),
-        api.myProviderPrescriptions(token),
-        api.myProviderClinicalReviews(token),
-      ])
-      setPatients(p); setLaboratories(l); setRequests(r); setReports(d); setCareConnections(c); setRecordRequests(q); setProviderAffiliations(affiliations); setCrossHospitalExchanges(exchanges); setRegistryOrganizations(organizations); setPrescriptions(providerPrescriptions); setClinicalReviews(providerReviews)
-      if (!form.lab_email && l.length > 0) setForm((current) => ({ ...current, lab_email: l[0].email }))
-    } catch (e) { setErr(e.message) }
+    setErr('')
+    const results = await Promise.allSettled([
+      api.accessiblePatients(token),
+      api.listLaboratories(token),
+      api.listServiceRequests(token),
+      api.listDiagnosticReports(token),
+      api.myProviderCareConnections(token),
+      api.myProviderRecordRequests(token),
+      api.myProviderAffiliations(token),
+      api.myProviderCrossHospitalExchanges(token),
+      api.registryOrganizations(token),
+      api.myProviderPrescriptions(token),
+      api.myProviderClinicalReviews(token),
+    ])
+    const value = (index, fallback) => results[index].status === 'fulfilled' ? results[index].value : fallback
+    const patientsValue = value(0, [])
+    const laboratoriesValue = value(1, [])
+    setPatients(patientsValue)
+    setLaboratories(laboratoriesValue)
+    setRequests(value(2, []))
+    setReports(value(3, []))
+    setCareConnections(value(4, []))
+    setRecordRequests(value(5, []))
+    setProviderAffiliations(value(6, []))
+    setCrossHospitalExchanges(value(7, []))
+    setRegistryOrganizations(value(8, []))
+    setPrescriptions(value(9, []))
+    setClinicalReviews(value(10, []))
+    if (!form.lab_email && laboratoriesValue.length > 0) setForm((current) => ({ ...current, lab_email: laboratoriesValue[0].email }))
+    const failed = results.find((result) => result.status === 'rejected')
+    if (failed) setErr(failed.reason?.message || 'Some clinical information could not be loaded.')
   }
 
   useEffect(() => { refresh() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,13 +122,14 @@ export default function DoctorDashboard({ token }) {
 
   async function submitPrescription(e) {
     e.preventDefault()
-    setErr(''); setMessage('')
+    if (submittingPrescription) return
+    setErr(''); setMessage(''); setSubmittingPrescription(true)
     try {
       await api.createPrescription({ ...prescriptionForm, activate: true }, token)
       setMessage('Prescription created.')
       setPrescriptionForm({ patient_id: '', organization_id: '', medication_name: '', dosage: '', route: '', frequency: '', duration: '', quantity: '', instructions: '' })
       await refresh()
-    } catch (e) { setErr(e.message) }
+    } catch (e) { setErr(e.message) } finally { setSubmittingPrescription(false) }
   }
 
   async function transitionPrescription(prescription, status) {
@@ -125,14 +142,15 @@ export default function DoctorDashboard({ token }) {
   }
 
   async function submitClinicalReview(e) {
-    e.preventDefault()
-    setErr(''); setMessage('')
+        e.preventDefault()
+    if (submittingReview) return
+    setErr(''); setMessage(''); setSubmittingReview(true)
     try {
       await api.createClinicalReview(reviewForm, token)
       setMessage('Clinical review recorded.')
       setReviewForm({ patient_id: '', organization_id: '', diagnostic_report_id: '', status: 'REVIEWED', clinical_note: '' })
       await refresh()
-    } catch (e) { setErr(e.message) }
+    } catch (e) { setErr(e.message) } finally { setSubmittingReview(false) }
   }
 
   async function submitRecordRequest(e) {
@@ -214,7 +232,7 @@ export default function DoctorDashboard({ token }) {
           <label>Duration<input maxLength={120} value={prescriptionForm.duration} onChange={(e) => setPrescriptionForm((f) => ({ ...f, duration: e.target.value }))} /></label>
           <label>Quantity<input maxLength={120} value={prescriptionForm.quantity} onChange={(e) => setPrescriptionForm((f) => ({ ...f, quantity: e.target.value }))} /></label>
           <label>Instructions<textarea rows="3" maxLength={1000} value={prescriptionForm.instructions} onChange={(e) => setPrescriptionForm((f) => ({ ...f, instructions: e.target.value }))} /></label>
-          <button className="btn-primary" type="submit">Create prescription</button>
+          <button className="btn-primary" type="submit" disabled={submittingPrescription}>{submittingPrescription ? 'Creating…' : 'Create prescription'}</button>
         </form>
         {prescriptions.map((prescription) => <div className="report" key={prescription.id}><strong>{prescription.medication_name} · {prescription.dosage}</strong><span className="muted">{prescription.patient_name} · {prescription.status}</span>{!['CANCELLED', 'COMPLETED', 'STOPPED'].includes(prescription.status) && <div className="registry-actions"><button className="btn-ghost" onClick={() => transitionPrescription(prescription, 'STOPPED')}>Stop</button><button className="btn-ghost" onClick={() => transitionPrescription(prescription, 'CANCELLED')}>Cancel</button></div>}</div>)}
       </section>
@@ -224,10 +242,10 @@ export default function DoctorDashboard({ token }) {
         <form onSubmit={submitClinicalReview} className="stacked-form">
           <label>Patient<select required value={reviewForm.patient_id} onChange={(e) => setReviewForm((f) => ({ ...f, patient_id: e.target.value }))}><option value="">Choose patient</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.full_name}</option>)}</select></label>
           <label>Organization<select required value={reviewForm.organization_id} onChange={(e) => setReviewForm((f) => ({ ...f, organization_id: e.target.value }))}><option value="">Choose organization</option>{providerAffiliations.filter((item) => item.status === 'ACTIVE').map((item) => <option key={item.organization_id} value={item.organization_id}>{item.organization_name}</option>)}</select></label>
-          <label>Diagnostic report ID<input value={reviewForm.diagnostic_report_id} onChange={(e) => setReviewForm((f) => ({ ...f, diagnostic_report_id: e.target.value }))} /></label>
+          <label>Diagnostic report<select value={reviewForm.diagnostic_report_id} onChange={(e) => setReviewForm((f) => ({ ...f, diagnostic_report_id: e.target.value }))}><option value="">Select authorized report</option>{reports.map((report) => <option key={report.id} value={report.id}>{report.resource?.conclusion || report.id}</option>)}</select></label>
           <label>Review status<select value={reviewForm.status} onChange={(e) => setReviewForm((f) => ({ ...f, status: e.target.value }))}><option value="REVIEWED">Reviewed</option><option value="FOLLOW_UP_REQUIRED">Follow-up required</option></select></label>
           <label>Clinical note<textarea rows="3" maxLength={2000} value={reviewForm.clinical_note} onChange={(e) => setReviewForm((f) => ({ ...f, clinical_note: e.target.value }))} /></label>
-          <button className="btn-primary" type="submit">Record clinical review</button>
+          <button className="btn-primary" type="submit" disabled={submittingReview}>{submittingReview ? 'Recording…' : 'Record clinical review'}</button>
         </form>
         {clinicalReviews.map((review) => <div className="report" key={review.id}><strong>{review.patient_name} · {review.status}</strong><span>{review.clinical_note || 'No clinical note supplied'}</span></div>)}
       </section>

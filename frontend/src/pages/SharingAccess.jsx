@@ -20,6 +20,8 @@ export default function SharingAccess({ token }) {
   const [crossHospitalExchanges, setCrossHospitalExchanges] = useState([])
   const [prescriptions, setPrescriptions] = useState([])
   const [clinicalReviews, setClinicalReviews] = useState([])
+  const [laboratoryOrders, setLaboratoryOrders] = useState([])
+  const [diagnosticReports, setDiagnosticReports] = useState([])
   const [recipientType, setRecipientType] = useState('physician')
   const [doctorEmail, setDoctorEmail] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -43,6 +45,8 @@ export default function SharingAccess({ token }) {
       api.myPatientCrossHospitalExchanges(token),
       api.myPatientPrescriptions(token),
       api.myPatientClinicalReviews(token),
+      api.listServiceRequests(token),
+      api.listDiagnosticReports(token),
     ])
     if (results[0].status === 'fulfilled') setPhysicians(results[0].value)
     if (results[1].status === 'fulfilled') setOrganizations(results[1].value)
@@ -53,6 +57,8 @@ export default function SharingAccess({ token }) {
     if (results[6].status === 'fulfilled') setCrossHospitalExchanges(results[6].value)
     if (results[7].status === 'fulfilled') setPrescriptions(results[7].value)
     if (results[8].status === 'fulfilled') setClinicalReviews(results[8].value)
+    if (results[9].status === 'fulfilled') setLaboratoryOrders(results[9].value)
+    if (results[10].status === 'fulfilled') setDiagnosticReports(results[10].value)
     const failed = results.find((result) => result.status === 'rejected')
     if (failed) setError(failed.reason?.message || 'Some access information could not be loaded.')
     setLoading(false)
@@ -197,6 +203,16 @@ export default function SharingAccess({ token }) {
             {revokingId === consent.id && <TransferStatus>Revoking access</TransferStatus>}
           </article>
         })}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">LABORATORY ORDERS</p><h2>Your clinical orders</h2>
+        {laboratoryOrders.length === 0 ? <p className="muted">No laboratory orders are available for your account.</p> : <div className="activity-list">{laboratoryOrders.map((order) => <div className="activity-row" key={order.id}><strong>{order.resource?.code?.text || 'Laboratory order'}</strong><span>{order.workflow_status || order.resource?.status}</span><small>{displayDate(order.created_at)}</small></div>)}</div>}
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">DIAGNOSTIC REPORTS</p><h2>Your reports</h2>
+        {diagnosticReports.length === 0 ? <p className="muted">No authorized diagnostic reports are available.</p> : <div className="activity-list">{diagnosticReports.map((report) => <div className="activity-row" key={report.id}><strong>{report.resource?.conclusion || 'Diagnostic report'}</strong><span>{report.resource?.status || 'Reported'}</span><small>{displayDate(report.created_at)}</small></div>)}</div>}
       </section>
 
       <section className="card">

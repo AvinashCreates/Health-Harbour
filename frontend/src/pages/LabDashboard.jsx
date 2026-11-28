@@ -24,6 +24,9 @@ export default function LabDashboard({ token, user }) {
   const [err, setErr] = useState('')
   const [busyId, setBusyId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [amendReportId, setAmendReportId] = useState('')
+  const [amendConclusion, setAmendConclusion] = useState('')
+  const [amendReason, setAmendReason] = useState('')
   const isTechnician = user.role === 'lab_technician'
 
   async function refresh() {
@@ -59,16 +62,17 @@ export default function LabDashboard({ token, user }) {
     }
   }
 
-  async function amendReport(request) {
-    const conclusion = window.prompt('Enter the amended report conclusion')
-    if (!conclusion) return
-    const reason = window.prompt('Enter the reason for the amendment')
-    if (!reason) return
+  async function amendReport(e) {
+    e.preventDefault()
+    if (!amendReportId) return
     setErr(''); setMessage('')
-    setBusyId(request.id)
+    setBusyId(amendReportId)
     try {
-      await api.amendDiagnosticReport(request.report_id, { conclusion, reason }, token)
+      await api.amendDiagnosticReport(amendReportId, { conclusion: amendConclusion, reason: amendReason }, token)
       setMessage('Diagnostic report amended.')
+      setAmendReportId('')
+      setAmendConclusion('')
+      setAmendReason('')
       await refresh()
     } catch (e) { setErr(e.message) } finally { setBusyId('') }
   }
@@ -158,13 +162,25 @@ export default function LabDashboard({ token, user }) {
               {!isTechnician && status === 'RESULTS_SUBMITTED' && (
                 <button className="btn-primary" disabled={busy} onClick={() => runAction(request, 'finalize')}>{busy ? 'Saving…' : 'Review and finalize'}</button>
               )}
-              {['FINALIZED', 'PHYSICIAN_REVIEWED'].includes(status) && request.report_id && <><p className="muted">The report is finalized and ready for the requesting physician.</p><button className="btn-ghost" disabled={busy} onClick={() => amendReport(request)}>Amend report</button></>}
+              {['FINALIZED', 'PHYSICIAN_REVIEWED'].includes(status) && request.report_id && <><p className="muted">The report is finalized and ready for the requesting physician.</p><button className="btn-ghost" disabled={busy} onClick={() => { setAmendReportId(request.report_id); setAmendConclusion(''); setAmendReason('') }}>Amend report</button></>}
             </article>
           )
         })}
         {message && <div className="success" role="status">{message}</div>}
         {err && <div className="error" role="alert">{err}</div>}
       </section>
+
+      {amendReportId && (
+        <section className="card">
+          <p className="eyebrow">REPORT AMENDMENT</p>
+          <h2>Amend finalized report</h2>
+          <form onSubmit={amendReport} className="stacked-form">
+            <label>Amended conclusion<input required maxLength={2000} value={amendConclusion} onChange={(e) => setAmendConclusion(e.target.value)} /></label>
+            <label>Reason for amendment<input required minLength={3} maxLength={1000} value={amendReason} onChange={(e) => setAmendReason(e.target.value)} /></label>
+            <div className="action-row"><button className="btn-primary" type="submit" disabled={Boolean(busyId)}>{busyId ? 'Saving…' : 'Submit amendment'}</button><button className="btn-ghost" type="button" onClick={() => setAmendReportId('')}>Cancel</button></div>
+          </form>
+        </section>
+      )}
 
       {selected && (
         <section className="card">
